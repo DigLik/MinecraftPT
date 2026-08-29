@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -491,7 +491,7 @@ public unsafe partial class VulkanRenderPipeline : IRenderPipeline
             out _specularHitDistanceImage, out _specularHitDistanceImageMemory, out _specularHitDistanceImageView);
     }
 
-    public IMesh CreateMesh<T>(NativeList<T> vertices, NativeList<ushort> indices, uint opaqueIndexCount = 0) where T : unmanaged
+    public IMesh CreateMesh<T>(List<T> vertices, List<ushort> indices, uint opaqueIndexCount = 0) where T : unmanaged
         => _meshPool.Allocate(vertices, indices, opaqueIndexCount);
 
     public void DeleteMesh(IMesh mesh) => _pendingMeshesToDispose.Enqueue(mesh);

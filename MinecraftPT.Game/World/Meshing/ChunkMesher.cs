@@ -1,11 +1,11 @@
-﻿using System.Numerics;
+using System.Collections.Generic;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 using MinecraftPT.Game.World.Blocks;
 using MinecraftPT.Game.World.Blocks.Services;
 using MinecraftPT.Game.World.Chunks;
 using MinecraftPT.Game.World.Environment;
-using MinecraftPT.Utils.Collections;
 using MinecraftPT.Utils.Math;
 
 namespace MinecraftPT.Game.World.Meshing;
@@ -39,16 +39,16 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
         chunkManager.TryGetChunk(chunkPos + new Vector3Int(0, 1, 0), out ChunkSection nPosY);
         chunkManager.TryGetChunk(chunkPos + new Vector3Int(0, -1, 0), out ChunkSection nNegY);
 
-        NativeList<ChunkVertex> vertices = new(4096);
-        NativeList<ushort> opaqueIndices = new(6144);
-        NativeList<ushort> transparentIndices = new(1536);
+        List<ChunkVertex> vertices = new(8192);
+        List<ushort> opaqueIndices = new(12288);
+        List<ushort> transparentIndices = new(2048);
 
         int grassOverlayId = resourceService.GetSpecialMaterialIndex(SpecialMaterialId.GrassSideOverlay);
         ReadOnlySpan<BlockDefinition> defs = blockService.GetDefinitionsFast();
 
-        ref NativeList<BlockId> blocks = ref centerChunk.Blocks;
+        List<BlockId>? blocks = centerChunk.Blocks;
         BlockId uniformId = centerChunk.UniformId;
-        bool isUniform = !blocks.IsCreated;
+        bool isUniform = blocks == null;
         bool isBottomChunk = chunkPos.Z == 0;
 
         int index = 0;
@@ -63,7 +63,7 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
                 bool zMax = z == 15;
                 for (int x = 0; x < ChunkSize; x++, index++)
                 {
-                    BlockId currentId = isUniform ? uniformId : blocks[index];
+                    BlockId currentId = isUniform ? uniformId : blocks![index];
                     if (currentId == BlockId.Air) continue;
 
                     ref readonly BlockDefinition currentDef = ref defs[(int)currentId];
@@ -82,7 +82,7 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
                     }
                     else
                     {
-                        var neighbor = defs[(int)(isUniform ? uniformId : blocks[index + 16])];
+                        var neighbor = defs[(int)(isUniform ? uniformId : blocks![index + 16])];
                         if (ShouldRenderFace(in neighbor, GetOppositeFace(0)))
                         {
                             int textureId = currentDef.Textures.Top;
@@ -106,7 +106,7 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
                         }
                         else
                         {
-                            var neighbor = defs[(int)(isUniform ? uniformId : blocks[index - 16])];
+                            var neighbor = defs[(int)(isUniform ? uniformId : blocks![index - 16])];
                             if (ShouldRenderFace(in neighbor, GetOppositeFace(1)))
                             {
                                 int textureId = currentDef.Textures.Bottom;
@@ -128,7 +128,7 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
                     }
                     else
                     {
-                        var neighbor = defs[(int)(isUniform ? uniformId : blocks[index - 1])];
+                        var neighbor = defs[(int)(isUniform ? uniformId : blocks![index - 1])];
                         if (ShouldRenderFace(in neighbor, GetOppositeFace(2)))
                         {
                             int textureId = currentDef.Textures.Side;
@@ -149,7 +149,7 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
                     }
                     else
                     {
-                        var neighbor = defs[(int)(isUniform ? uniformId : blocks[index + 1])];
+                        var neighbor = defs[(int)(isUniform ? uniformId : blocks![index + 1])];
                         if (ShouldRenderFace(in neighbor, GetOppositeFace(3)))
                         {
                             int textureId = currentDef.Textures.Side;
@@ -170,7 +170,7 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
                     }
                     else
                     {
-                        var neighbor = defs[(int)(isUniform ? uniformId : blocks[index + 256])];
+                        var neighbor = defs[(int)(isUniform ? uniformId : blocks![index + 256])];
                         if (ShouldRenderFace(in neighbor, GetOppositeFace(4)))
                         {
                             int textureId = currentDef.Textures.Side;
@@ -191,7 +191,7 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
                     }
                     else
                     {
-                        var neighbor = defs[(int)(isUniform ? uniformId : blocks[index - 256])];
+                        var neighbor = defs[(int)(isUniform ? uniformId : blocks![index - 256])];
                         if (ShouldRenderFace(in neighbor, GetOppositeFace(5)))
                         {
                             int textureId = currentDef.Textures.Side;
@@ -206,10 +206,8 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
         uint opaqueCount = (uint)opaqueIndices.Count;
         if (transparentIndices.Count > 0)
         {
-            opaqueIndices.Resize((int)opaqueCount + transparentIndices.Count);
-            System.Buffer.MemoryCopy(transparentIndices.Data, opaqueIndices.Data + opaqueCount, transparentIndices.Count * sizeof(ushort), transparentIndices.Count * sizeof(ushort));
+            opaqueIndices.AddRange(transparentIndices);
         }
-        transparentIndices.Dispose();
 
         if (vertices.Count > 0)
         {
@@ -217,9 +215,7 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
         }
         else
         {
-            vertices.Dispose();
-            opaqueIndices.Dispose();
-            return new ChunkMesh { Vertices = default, Indices = default, OpaqueIndexCount = 0 };
+            return new ChunkMesh { Vertices = null, Indices = null, OpaqueIndexCount = 0 };
         }
     }
 
@@ -238,7 +234,7 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static BlockId GetNeighborBlock(ref ChunkSection chunk, int index)
     {
-        if (chunk.Blocks.IsCreated) return chunk.Blocks[index];
+        if (chunk.Blocks != null) return chunk.Blocks[index];
         return chunk.UniformId;
     }
 
@@ -259,7 +255,7 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void BuildFace(
-        ref NativeList<ChunkVertex> vertices, ref NativeList<ushort> indices,
+        ref List<ChunkVertex> vertices, ref List<ushort> indices,
         int x, int y, int z, int faceIndex,
         BlockId currentId, ref readonly BlockDefinition currentDef, int grassOverlayId)
     {

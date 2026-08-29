@@ -1,4 +1,5 @@
-﻿using System.Buffers;
+using System.Buffers;
+using System.Runtime.InteropServices;
 
 using MinecraftPT.Game.World.Blocks;
 using MinecraftPT.Game.World.Chunks;
@@ -16,9 +17,9 @@ public static unsafe class ChunkSerializer
         buffer[0] = (byte)chunk.UniformId;
         buffer[1] = chunk.IsAllocated ? (byte)1 : (byte)0;
 
-        if (chunk.IsAllocated && chunk.Blocks.IsCreated)
+        if (chunk.IsAllocated && chunk.Blocks != null)
         {
-            var sourceSpan = new ReadOnlySpan<byte>(chunk.Blocks.Data, BlocksInChunk);
+            var sourceSpan = MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(chunk.Blocks));
             var destSpan = new Span<byte>(buffer, 2, BlocksInChunk);
             sourceSpan.CopyTo(destSpan);
         }
@@ -34,12 +35,12 @@ public static unsafe class ChunkSerializer
         if (isAllocated)
         {
             chunk.Allocate();
-            var destSpan = new Span<byte>(chunk.Blocks.Data, BlocksInChunk);
+            var destSpan = MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(chunk.Blocks));
             data.Slice(2, BlocksInChunk).CopyTo(destSpan);
 
             int nonAir = 0;
             for (int i = 0; i < BlocksInChunk; i++)
-                if (chunk.Blocks[i] != BlockId.Air) nonAir++;
+                if (chunk.Blocks![i] != BlockId.Air) nonAir++;
 
             chunk.NonAirBlockCount = nonAir;
         }

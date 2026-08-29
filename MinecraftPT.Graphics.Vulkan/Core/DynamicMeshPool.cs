@@ -1,8 +1,7 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-
-using MinecraftPT.Utils.Collections;
 
 using Silk.NET.Vulkan;
 
@@ -159,10 +158,13 @@ public unsafe class DynamicMeshPool : IDisposable
         _uploadThread.Start();
     }
 
-    public MeshAllocation Allocate<T>(NativeList<T> vertices, NativeList<ushort> indices, uint opaqueIndexCount) where T : unmanaged
+    public MeshAllocation Allocate<T>(List<T> vertices, List<ushort> indices, uint opaqueIndexCount) where T : unmanaged
     {
-        ulong exactVertexSize = (ulong)(vertices.Count * sizeof(T));
-        ulong exactIndexSize = (ulong)(indices.Count * sizeof(ushort));
+        ReadOnlySpan<T> vSpan = CollectionsMarshal.AsSpan(vertices);
+        ReadOnlySpan<ushort> iSpan = CollectionsMarshal.AsSpan(indices);
+
+        ulong exactVertexSize = (ulong)(vSpan.Length * sizeof(T));
+        ulong exactIndexSize = (ulong)(iSpan.Length * sizeof(ushort));
 
         ulong alignedVertexSize = AlignUp(exactVertexSize, 256);
         ulong alignedIndexSize = AlignUp(exactIndexSize, 256);
@@ -201,13 +203,26 @@ public unsafe class DynamicMeshPool : IDisposable
             IndexChunk = iChunk!
         };
 
+        void* pVertices = exactVertexSize > 0 ? NativeMemory.Alloc((nuint)exactVertexSize) : null;
+        void* pIndices = exactIndexSize > 0 ? NativeMemory.Alloc((nuint)exactIndexSize) : null;
+
+        if (pVertices != null && exactVertexSize > 0)
+        {
+            vSpan.CopyTo(new Span<T>(pVertices, vSpan.Length));
+        }
+
+        if (pIndices != null && exactIndexSize > 0)
+        {
+            iSpan.CopyTo(new Span<ushort>(pIndices, iSpan.Length));
+        }
+
         _pendingUploads.Add(new PendingUpload
         {
-            Vertices = vertices.Data,
+            Vertices = pVertices,
             VertexByteSize = (int)exactVertexSize,
             VertexCount = vertices.Count,
             VertexStride = sizeof(T),
-            Indices = indices.Data,
+            Indices = pIndices,
             IndexByteSize = (int)exactIndexSize,
             IndexCount = indices.Count,
             OpaqueIndexCount = opaqueIndexCount,
@@ -296,8 +311,8 @@ public unsafe class DynamicMeshPool : IDisposable
             _device.Vk.CmdCopyBuffer2(transferCmd, in iCopyInfo);
             currentOffset += (ulong)upload.IndexByteSize;
 
-            NativeMemory.Free(upload.Vertices);
-            NativeMemory.Free(upload.Indices);
+            if (upload.Vertices != null) NativeMemory.Free(upload.Vertices);
+            if (upload.Indices != null) NativeMemory.Free(upload.Indices);
         }
 
         _device.Vk.EndCommandBuffer(transferCmd);

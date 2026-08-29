@@ -1,44 +1,46 @@
-﻿using System.Runtime.CompilerServices;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 using MinecraftPT.Game.World.Blocks;
-using MinecraftPT.Utils.Collections;
 using MinecraftPT.Utils.Math;
 
 namespace MinecraftPT.Game.World.Chunks;
 
 public struct ChunkSection
 {
-    public NativeList<BlockId> Blocks;
+    public List<BlockId>? Blocks;
     public int NonAirBlockCount;
     public BlockId UniformId;
     public bool IsModified;
     public Vector3Int Position { get; set; }
 
-    public readonly bool IsAllocated => Blocks.IsCreated;
+    public readonly bool IsAllocated => Blocks != null;
     public readonly bool IsEmpty => !IsAllocated ? UniformId == BlockId.Air : NonAirBlockCount == 0;
     public readonly bool IsFull => !IsAllocated ? UniformId != BlockId.Air : NonAirBlockCount == BlocksInChunk;
 
     public void Reset()
     {
-        if (IsAllocated) { Blocks.Dispose(); Blocks = default; }
+        if (IsAllocated) { Blocks = null; }
         NonAirBlockCount = 0; UniformId = BlockId.Air; IsModified = false;
     }
 
     public void Fill(BlockId id)
     {
-        if (IsAllocated) { Blocks.Dispose(); Blocks = default; }
+        if (IsAllocated) { Blocks = null; }
         UniformId = id; NonAirBlockCount = id == BlockId.Air ? 0 : BlocksInChunk; IsModified = true;
     }
 
     public void Allocate()
     {
         if (IsAllocated) return;
-        Blocks = new NativeList<BlockId>(BlocksInChunk);
-        Blocks.Resize(BlocksInChunk, UniformId);
+        Blocks = new List<BlockId>(BlocksInChunk);
+        CollectionsMarshal.SetCount(Blocks, BlocksInChunk);
+        CollectionsMarshal.AsSpan(Blocks).Fill(UniformId);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly BlockId GetBlock(int index) => IsAllocated ? Blocks[index] : UniformId;
+    public readonly BlockId GetBlock(int index) => IsAllocated ? Blocks![index] : UniformId;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly BlockId GetBlock(int x, int y, int z) => GetBlock(GetIndex(x, y, z));
@@ -52,7 +54,7 @@ public struct ChunkSection
         if (IsAllocated)
         {
             int index = GetIndex(pos);
-            if (Blocks[index] == id) return;
+            if (Blocks![index] == id) return;
             NonAirBlockCount += (Blocks[index] == BlockId.Air ? 1 : 0) - (id == BlockId.Air ? 1 : 0);
             Blocks[index] = id;
             IsModified = true;
@@ -66,11 +68,10 @@ public struct ChunkSection
     public void Optimize()
     {
         if (!IsAllocated) return;
-        BlockId first = Blocks[0];
+        BlockId first = Blocks![0];
         for (int i = 1; i < BlocksInChunk; i++) if (Blocks[i] != first) return;
 
-        Blocks.Dispose();
-        Blocks = default;
+        Blocks = null;
         UniformId = first;
         NonAirBlockCount = first == BlockId.Air ? 0 : BlocksInChunk;
     }

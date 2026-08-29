@@ -1,4 +1,5 @@
-﻿using MinecraftPT.Engine.Abstractions.Graphics;
+using System.Collections.Generic;
+using MinecraftPT.Engine.Abstractions.Graphics;
 using MinecraftPT.Utils.Math;
 
 namespace MinecraftPT.Game.World.Meshing;
@@ -7,6 +8,7 @@ public class PriorityChunkQueue
 {
     private readonly HashSet<Vector3Int>[] _buckets;
     private readonly HashSet<Vector3Int> _hashed = [];
+    private readonly List<Vector3Int> _rebuildBuffer = new(67600);
     private int _count = 0;
     private readonly object _sync = new();
     private bool _completed;
@@ -35,17 +37,17 @@ public class PriorityChunkQueue
     private void RebuildBucketsLocked()
     {
         if (_count == 0) return;
-        List<Vector3Int> all = new List<Vector3Int>(_count);
+        _rebuildBuffer.Clear();
         for (int i = 0; i < _buckets.Length; i++)
         {
             if (_buckets[i].Count > 0)
             {
-                all.AddRange(_buckets[i]);
+                _rebuildBuffer.AddRange(_buckets[i]);
                 _buckets[i].Clear();
             }
         }
 
-        foreach (var pos in all)
+        foreach (var pos in _rebuildBuffer)
         {
             int dist = System.Math.Max(System.Math.Abs(pos.X - _playerChunk.X), System.Math.Abs(pos.Y - _playerChunk.Y));
             if (dist >= _buckets.Length) dist = _buckets.Length - 1;

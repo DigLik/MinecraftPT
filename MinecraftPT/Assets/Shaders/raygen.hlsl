@@ -142,7 +142,7 @@ void main() {
 
         bool primaryDataWritten = false;
 
-        for (int bounce = 0; bounce < 32; bounce++) {
+        for (int bounce = 0; bounce < 4; bounce++) {
             Payload payload;
             payload.hitDistance = -1.0;
 
@@ -261,7 +261,7 @@ void main() {
                         float specCurrentAbsorption = currentAbsorption;
                         float3 specCurrentAlbedo = currentAlbedo;
 
-                        for (int rBounce = 1; rBounce < 6; rBounce++) {
+                        for (int rBounce = 1; rBounce < 4; rBounce++) {
                             Payload rPayload;
                             rPayload.hitDistance = -1.0;
 
@@ -476,7 +476,7 @@ void main() {
             rayOrigin = safeOrigin;
             rayDir = nextDir;
             
-            if (bounce > 4) {
+            if (bounce > 2) {
                 float maxThroughput = max(max(throughput.r, throughput.g), throughput.b);
                 if (rnd() > maxThroughput) break;
                 throughput /= maxThroughput;

@@ -1,6 +1,4 @@
-﻿using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-
+using StbImageSharp;
 using ZstdSharp;
 
 if (args.Length < 2)
@@ -12,11 +10,10 @@ if (args.Length < 2)
 string inputPath = args[0];
 string outputPath = args[1];
 
-using var image = Image.Load<Rgba32>(inputPath);
-byte[] rawPixelData = new byte[image.Width * image.Height * 4];
-image.CopyPixelDataTo(rawPixelData);
+using var stream = File.OpenRead(inputPath);
+var image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
 
-using var compressor = new Compressor();
-Span<byte> compressedData = compressor.Wrap(rawPixelData);
+using var compressor = new Compressor(3);
+Span<byte> compressedData = compressor.Wrap(image.Data);
 
 File.WriteAllBytes(outputPath, compressedData);

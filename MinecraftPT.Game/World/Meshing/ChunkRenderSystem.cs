@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+using System.Collections.Generic;
+using System.Numerics;
 
 using HighPerformanceBus;
 
@@ -35,8 +36,8 @@ public class ChunkRenderSystem : ISystem, IDisposable, IEventHandler<BlockChange
 
     private readonly Lock _stateLock = new();
 
-    private NativeList<Vector3Int> _chunksToRemove = new(1024);
-    private NativeList<Vector3Int> _readyList = new(1024);
+    private List<Vector3Int> _chunksToRemove = new(1024);
+    private List<Vector3Int> _readyList = new(1024);
 
     private Vector3Int _lastPlayerChunk = new(int.MaxValue);
     private ITextureArray? _textureArray;
@@ -168,7 +169,7 @@ public class ChunkRenderSystem : ISystem, IDisposable, IEventHandler<BlockChange
 
                 if (!meshData.IsEmpty)
                 {
-                    var gpuMesh = _pipeline.CreateMesh(meshData.Vertices, meshData.Indices, meshData.OpaqueIndexCount);
+                    var gpuMesh = _pipeline.CreateMesh(meshData.Vertices!, meshData.Indices!, meshData.OpaqueIndexCount);
                     _builtMeshes.Add((meshPos, gpuMesh));
                 }
                 else
@@ -342,8 +343,6 @@ public class ChunkRenderSystem : ISystem, IDisposable, IEventHandler<BlockChange
             foreach (var mesh in _pendingReadyMeshes.Values) _pipeline.DeleteMesh(mesh);
         }
 
-        _chunksToRemove.Dispose();
-        _readyList.Dispose();
         _textureArray?.Dispose();
     }
 

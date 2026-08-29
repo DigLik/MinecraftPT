@@ -1,6 +1,9 @@
-﻿using System.Buffers;
+using System.Buffers;
+using System.Buffers.Binary;
 
 using MinecraftPT.Utils.Math;
+
+using ZstdSharp;
 
 namespace MinecraftPT.Game.World.Environment;
 
@@ -8,7 +11,10 @@ public readonly record struct PooledChunkData(byte[] Buffer, int Length);
 
 public class Bucket
 {
+    private const uint ZstdMagicNumber = 0xFD2FB528;
+
     private readonly string _filePath;
+    private readonly string _legacyFilePath;
     private readonly Lock _ioLock = new();
     private readonly Lock _dataLock = new();
 
@@ -19,39 +25,66 @@ public class Bucket
 
     public Bucket(string directory, Vector3Int bucketPos)
     {
-        _filePath = Path.Combine(directory, $"bucket.{bucketPos.X}.{bucketPos.Y}.{bucketPos.Z}.bin");
+        _filePath = Path.Combine(directory, $"bucket.{bucketPos.X}.{bucketPos.Y}.{bucketPos.Z}.zbin");
+        _legacyFilePath = Path.Combine(directory, $"bucket.{bucketPos.X}.{bucketPos.Y}.{bucketPos.Z}.bin");
         Load();
     }
 
     private void Load()
     {
-        if (!File.Exists(_filePath)) return;
+        string? targetPath = null;
+        if (File.Exists(_filePath)) targetPath = _filePath;
+        else if (File.Exists(_legacyFilePath)) targetPath = _legacyFilePath;
+
+        if (targetPath == null) return;
+
         lock (_ioLock)
         {
             try
             {
-                using var fs = File.OpenRead(_filePath);
-                using var reader = new BinaryReader(fs);
+                byte[] fileBytes = File.ReadAllBytes(targetPath);
+                if (fileBytes.Length < 4) return;
 
-                int chunkCount = reader.ReadInt32();
-                lock (_dataLock)
+                uint magic = BinaryPrimitives.ReadUInt32LittleEndian(fileBytes.AsSpan(0, 4));
+                Stream dataStream;
+                MemoryStream? decompressedStream = null;
+
+                if (magic == ZstdMagicNumber)
                 {
-                    for (int i = 0; i < chunkCount; i++)
-                    {
-                        int x = reader.ReadInt32();
-                        int y = reader.ReadInt32();
-                        int z = reader.ReadInt32();
+                    using var decompressor = new Decompressor();
+                    byte[] uncompressed = decompressor.Unwrap(fileBytes).ToArray();
+                    decompressedStream = new MemoryStream(uncompressed);
+                    dataStream = decompressedStream;
+                }
+                else
+                {
+                    dataStream = new MemoryStream(fileBytes);
+                }
 
-                        int dataLength = reader.ReadInt32();
-                        byte[] buffer = ArrayPool<byte>.Shared.Rent(dataLength);
-                        reader.Read(buffer, 0, dataLength);
-                        _chunkData[new Vector3Int(x, y, z)] = new PooledChunkData(buffer, dataLength);
+                using (decompressedStream)
+                using (dataStream)
+                using (var reader = new BinaryReader(dataStream))
+                {
+                    int chunkCount = reader.ReadInt32();
+                    lock (_dataLock)
+                    {
+                        for (int i = 0; i < chunkCount; i++)
+                        {
+                            int x = reader.ReadInt32();
+                            int y = reader.ReadInt32();
+                            int z = reader.ReadInt32();
+
+                            int dataLength = reader.ReadInt32();
+                            byte[] buffer = ArrayPool<byte>.Shared.Rent(dataLength);
+                            reader.Read(buffer, 0, dataLength);
+                            _chunkData[new Vector3Int(x, y, z)] = new PooledChunkData(buffer, dataLength);
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading bucket {_filePath}: {ex.Message}");
+                Console.WriteLine($"Error loading bucket {targetPath}: {ex.Message}");
             }
         }
     }
@@ -63,8 +96,8 @@ public class Bucket
         {
             try
             {
-                using var fs = File.Create(_filePath);
-                using var writer = new BinaryWriter(fs);
+                using var ms = new MemoryStream();
+                using var writer = new BinaryWriter(ms);
 
                 lock (_dataLock)
                 {
@@ -79,6 +112,27 @@ public class Bucket
                         writer.Write(kvp.Value.Buffer, 0, kvp.Value.Length);
                     }
                     IsDirty = false;
+                }
+
+                ReadOnlySpan<byte> uncompressedSpan = ms.GetBuffer().AsSpan(0, (int)ms.Length);
+                using var compressor = new Compressor(3);
+                Span<byte> compressedData = compressor.Wrap(uncompressedSpan);
+
+                using (var fs = File.Create(_filePath))
+                {
+                    fs.Write(compressedData);
+                }
+
+                if (File.Exists(_legacyFilePath))
+                {
+                    try
+                    {
+                        File.Delete(_legacyFilePath);
+                    }
+                    catch
+                    {
+                        // Игнорируем ошибку удаления устаревшего файла при блокировке
+                    }
                 }
             }
             catch (Exception ex)

@@ -1,16 +1,17 @@
-﻿using System.Runtime.InteropServices;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace MinecraftPT.Utils.Collections;
 
-public class SparseSet<T> : IDisposable where T : unmanaged
+public class SparseSet<T> where T : unmanaged
 {
-    private NativeList<int> _dense = new(1024);
-    private NativeList<T> _elements = new(1024);
+    private List<int> _dense = new(1024);
+    private List<T> _elements = new(1024);
     private int[] _sparse;
 
     public int Count => _dense.Count;
 
-    public ReadOnlySpan<int> Data => MemoryMarshal.CreateReadOnlySpan(ref _dense[0], _dense.Count);
+    public ReadOnlySpan<int> Data => CollectionsMarshal.AsSpan(_dense);
 
     public SparseSet()
     {
@@ -44,7 +45,7 @@ public class SparseSet<T> : IDisposable where T : unmanaged
     {
         if (!Contains(id)) throw new KeyNotFoundException($"Key {id} was not found in SparseSet.");
         int denseIndex = _sparse[id];
-        return ref _elements[denseIndex];
+        return ref CollectionsMarshal.AsSpan(_elements)[denseIndex];
     }
 
     public void Remove(int id)
@@ -60,13 +61,7 @@ public class SparseSet<T> : IDisposable where T : unmanaged
         _sparse[lastId] = denseIndex;
         _sparse[id] = -1;
 
-        _dense.RemoveAtSwapBack(lastDenseIndex);
-        _elements.RemoveAtSwapBack(lastDenseIndex);
-    }
-
-    public void Dispose()
-    {
-        _dense.Dispose();
-        _elements.Dispose();
+        _dense.RemoveAt(lastDenseIndex);
+        _elements.RemoveAt(lastDenseIndex);
     }
 }

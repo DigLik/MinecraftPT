@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 
@@ -30,7 +30,7 @@ public sealed partial class EngineApp : IDisposable
         ChunkPosition = Vector3Int.Zero,
         LocalPosition = Vector3.Zero,
         SunDirection = new(0, 0, 1, 0),
-        SamplesPerPixel = 1
+        SamplesPerPixel = 2
     };
 
     [LoggerMessage(EventId = 1, Level = LogLevel.Debug, Message = "FPS: {Fps}")]
