@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using MinecraftPT.Engine.Abstractions.Graphics;
 using MinecraftPT.Utils.Math;
 
@@ -108,14 +107,19 @@ public class PriorityChunkQueue
 
             for (int i = 0; i < _buckets.Length; i++)
             {
-                if (_buckets[i].Count > 0)
+                var bucket = _buckets[i];
+                if (bucket.Count > 0)
                 {
-                    var fb = _buckets[i].First();
-                    _buckets[i].Remove(fb);
-                    _hashed.Remove(fb);
-                    _count--;
-                    item = fb;
-                    return true;
+                    using var e = bucket.GetEnumerator();
+                    if (e.MoveNext())
+                    {
+                        var fb = e.Current;
+                        bucket.Remove(fb);
+                        _hashed.Remove(fb);
+                        _count--;
+                        item = fb;
+                        return true;
+                    }
                 }
             }
 

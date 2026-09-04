@@ -1,4 +1,4 @@
-﻿using MinecraftPT.Engine.Abstractions.Graphics;
+using MinecraftPT.Engine.Abstractions.Graphics;
 
 namespace MinecraftPT.Game.World.Blocks.Services;
 
@@ -8,4 +8,5 @@ public interface IResourceService
     ReadOnlySpan<MaterialData> GetMaterialConfigs();
     byte[][] LoadTexturePixels(int sizeMap);
     bool IsMaterialOpaque(int materialIndex);
+    ushort GetOmmIndex(int materialIndex, int triangleType);
 }

@@ -1,11 +1,11 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace MinecraftPT.Utils.Math;
 
 [StructLayout(LayoutKind.Sequential)]
-public record struct Vector2Int(int X, int Y)
+public readonly record struct Vector2Int(int X, int Y)
 {
     public static readonly Vector2Int Zero = new(0, 0);
     public static readonly Vector2Int One = new(1, 1);

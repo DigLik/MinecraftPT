@@ -4,6 +4,7 @@
 # Build results
 bin/
 obj/
+*.spv
 
 # Visual Studio cache/options directory
 .vs/
@@ -11,5 +12,6 @@ obj/
 # Visual Studio Code
 .vscode
 
-# SDK
-streamline-sdk-v2.11.1/
+# Logs
+*.log
+log.txt

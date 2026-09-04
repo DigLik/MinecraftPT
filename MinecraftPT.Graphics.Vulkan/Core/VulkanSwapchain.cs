@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 
 using MinecraftPT.Utils.Math;
 
@@ -40,9 +40,19 @@ public unsafe class VulkanSwapchain : IDisposable
         var presentModes = new PresentModeKHR[presentModeCount];
         _device.KhrSurface.GetPhysicalDeviceSurfacePresentModes(_device.PhysicalDevice, _device.Surface, ref presentModeCount, out presentModes[0]);
 
-        PresentModeKHR presentMode = PresentModeKHR.FifoKhr;
+        bool hasMailbox = false;
+        bool hasImmediate = false;
         foreach (var mode in presentModes)
-            if (mode == PresentModeKHR.MailboxKhr) { presentMode = mode; break; }
+        {
+            if (mode == PresentModeKHR.MailboxKhr) hasMailbox = true;
+            else if (mode == PresentModeKHR.ImmediateKhr) hasImmediate = true;
+        }
+
+        PresentModeKHR presentMode = hasImmediate ? PresentModeKHR.ImmediateKhr :
+                                     hasMailbox ? PresentModeKHR.MailboxKhr :
+                                     PresentModeKHR.FifoKhr;
+
+        Console.WriteLine($"[Vulkan] Swapchain PresentMode: {presentMode}");
 
         uint[] queueFamilyIndices = [_device.GraphicsFamilyIndex, _device.PresentFamilyIndex];
         bool sameQueue = _device.GraphicsFamilyIndex == _device.PresentFamilyIndex;

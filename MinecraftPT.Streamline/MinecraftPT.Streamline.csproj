@@ -8,8 +8,15 @@
     <DisableRuntimeMarshalling>true</DisableRuntimeMarshalling>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Content Include="$(MSBuildThisFileDirectory)binaries\x64\*.dll">
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <Content Include="$(MSBuildThisFileDirectory)binaries\x64\development\*.dll">
+      <Link>binaries\x64\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)' != 'Debug'">
+    <Content Include="$(MSBuildThisFileDirectory)binaries\x64\production\*.dll">
       <Link>binaries\x64\%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

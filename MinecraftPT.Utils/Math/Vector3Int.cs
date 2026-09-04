@@ -1,11 +1,11 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace MinecraftPT.Utils.Math;
 
 [StructLayout(LayoutKind.Sequential)]
-public record struct Vector3Int(int X, int Y, int Z)
+public readonly record struct Vector3Int(int X, int Y, int Z)
 {
     public static readonly Vector3Int Zero = new(0, 0, 0);
     public static readonly Vector3Int One = new(1, 1, 1);

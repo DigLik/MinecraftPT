@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 
 using MinecraftPT.Engine.Abstractions;
 
@@ -102,6 +102,8 @@ public unsafe class GlfwInputManager : IInputManager
         EngineKey.S => Keys.S,
         EngineKey.D => Keys.D,
         EngineKey.F1 => Keys.F1,
+        EngineKey.F4 => Keys.F4,
+        EngineKey.R => Keys.R,
         EngineKey.ShiftLeft => Keys.ShiftLeft,
         EngineKey.ControlLeft => Keys.ControlLeft,
         _ => Keys.Unknown

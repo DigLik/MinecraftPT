@@ -1,4 +1,6 @@
-﻿namespace MinecraftPT.Game.World.Blocks;
+using System.Text.Json.Serialization;
+
+namespace MinecraftPT.Game.World.Blocks;
 
 public enum BlockId : byte
 {
@@ -37,7 +39,7 @@ public enum BlockTransparency : byte
     Foliage
 }
 
-[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<BlockFace>))]
+[JsonConverter(typeof(JsonStringEnumConverter<BlockFace>))]
 public enum BlockFace : byte
 {
     Top, Bottom, Side, All

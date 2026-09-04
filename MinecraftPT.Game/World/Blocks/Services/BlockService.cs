@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 
 using MinecraftPT.Game.World.Serialization;
 
@@ -8,9 +8,14 @@ public class BlockService : IBlockService
 {
     private readonly BlockDefinition[] _definitions = new BlockDefinition[256];
 
-    public BlockService()
+    public BlockService(string? customConfigPath = null)
     {
-        string path = Path.Combine(AppContext.BaseDirectory, "Assets", "Configs", "Blocks.json");
+        string path = customConfigPath ?? Path.Combine(AppContext.BaseDirectory, "Assets", "Configs", "Blocks.json");
+        if (!File.Exists(path))
+        {
+            string fallback = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "MinecraftPT", "Assets", "Configs", "Blocks.json"));
+            if (File.Exists(fallback)) path = fallback;
+        }
         using var fs = File.OpenRead(path);
         var blocks = JsonSerializer.Deserialize(fs, GameJsonSerializerContext.Default.ListBlockDefinitionJsonModel) ?? [];
 

@@ -1,73 +1,4 @@
-#ifndef __HLSL_VERSION
-typedef unsigned short uint16_t;
-typedef unsigned long long uint64_t;
-#endif
-
-struct Payload {
-    float3 hitPos;
-    float hitDistance;
-    float3 normal;
-    float roughness;
-    float3 albedo;
-    float metallic;
-    float3 emission;
-    float opacity;
-    float ior;
-    float absorption;
-    float frontFacing;
-};
-
-struct ChunkVertex {
-    float x;
-    float y;
-    float z;
-    uint packedData;
-};
-
-struct Vertices {
-    ChunkVertex v[16777216];
-};
-
-struct Indices {
-    uint16_t i[33554432];
-};
-
-struct InstanceData {
-    uint VertexOffset;
-    uint IndexOffset;
-    uint OpaqueIndexCount;
-    uint Pad2;
-    uint64_t VertexAddress;
-    uint64_t IndexAddress;
-};
-
-struct MaterialData {
-    float Roughness;
-    float Metallic;
-    float Emission;
-    float Opacity;
-    float Type;
-    float Ior;
-    float Absorption;
-    float Pad;
-};
-
-struct Camera {
-    column_major float4x4 ViewProj;
-    column_major float4x4 InverseViewProj;
-    column_major float4x4 PrevViewProj;
-    int3 ChunkPosition;
-    uint FrameCount;
-    float3 LocalPosition;
-    uint SamplesPerPixel;
-    float4 SunDirection;
-    float3 CameraUp;
-    uint Seed;
-    float3 CameraRight;
-    float JitterX;
-    float3 CameraFwd;
-    float JitterY;
-};
+#include "common.hlsli"
 
 RaytracingAccelerationStructure Scene : register(t0, space0);
 ConstantBuffer<Camera> cam : register(b2, space0);
@@ -110,8 +41,7 @@ void main(inout Payload payload, BuiltInTriangleIntersectionAttributes attribs) 
     float3 e1 = p1 - p0;
     float3 e2 = p2 - p0;
     float3 geomNormal = normalize(cross(e1, e2));
-    bool isFrontFace = dot(geomNormal, WorldRayDirection()) < 0.0;
-    float3 normal = isFrontFace ? geomNormal : -geomNormal;
+    float3 normal = geomNormal;
 
     uint pd = v0.packedData;
     int texIndex = int(pd & 0xFFF);
@@ -144,15 +74,48 @@ void main(inout Payload payload, BuiltInTriangleIntersectionAttributes attribs) 
 
     MaterialData mat = materials[texIndex];
 
-    payload.hitPos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+    float3 rayDirInChit = WorldRayDirection();
+    bool isExitHit = (dot(rayDirInChit, normal) > 0.0);
+    float3 shadingNormal = isExitHit ? -normal : normal;
+
     payload.hitDistance = RayTCurrent();
-    payload.normal = normal;
+    payload.normal = shadingNormal;
     payload.roughness = mat.Roughness;
-    payload.albedo = (mat.Type == 2.0) ? lerp(float3(1.0, 1.0, 1.0), texColor.rgb, texColor.a) : texColor.rgb;
     payload.metallic = mat.Metallic;
     payload.emission = texColor.rgb * mat.Emission;
-    payload.opacity = (mat.Type == 2.0) ? lerp(mat.Opacity, 1.0, texColor.a) : 1.0;
-    payload.ior = mat.Ior;
-    payload.absorption = mat.Absorption;
-    payload.frontFacing = isFrontFace ? 1.0 : 0.0;
+
+    if (mat.Type == 2.0) {
+        // Полупрозрачный материал (стекло, вода, лед):
+        if (texColor.a > 0.85) {
+            // Непрозрачная рамка / прожилки текстуры (как на внешней, так и на внутренней/обратной грани):
+            // Полноправная непрозрачная поверхность с прямым (NEE) и непрямым (GI) освещением
+            payload.opacity = 1.0;
+            payload.albedo = texColor.rgb;
+            payload.ior = 1.0;
+            payload.absorption = 0.0;
+        } else {
+            // Прозрачное тело материала / выходная грань среды: физическая преломляющая среда
+            float bodyAlpha = (texColor.a > 0.0) ? texColor.a : ((mat.Opacity > 0.0) ? mat.Opacity : 0.2);
+            if (mat.Opacity > 0.0 && mat.Opacity < 1.0 && texColor.a > 0.0) {
+                bodyAlpha *= mat.Opacity;
+            }
+            payload.opacity = max(bodyAlpha, 0.02);
+            payload.albedo = (dot(texColor.rgb, texColor.rgb) > 0.001) ? texColor.rgb : float3(0.92, 0.96, 0.98);
+            payload.ior = mat.Ior;
+            payload.absorption = mat.Absorption;
+        }
+    } else if (mat.Type == 1.0) {
+        payload.opacity = texColor.a;
+        payload.albedo = texColor.rgb;
+        payload.ior = mat.Ior;
+        payload.absorption = mat.Absorption;
+    } else {
+        payload.opacity = 1.0;
+        payload.albedo = texColor.rgb;
+        payload.ior = mat.Ior;
+        payload.absorption = mat.Absorption;
+    }
+    
+    float uvDet = (uv1.x - uv0.x) * (uv2.y - uv0.y) - (uv1.y - uv0.y) * (uv2.x - uv0.x);
+    payload.frontFacing = (uvDet < 0.0) ? 1.0 : 0.0;
 }

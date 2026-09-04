@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 
 using MinecraftPT.Engine.Abstractions;
 using MinecraftPT.Engine.Core;
@@ -7,7 +7,7 @@ using MinecraftPT.Engine.Input;
 
 namespace MinecraftPT.Game.Entities;
 
-public class PlayerInputSystem(IInputManager inputManager) : ISystem
+public class PlayerInputSystem(IInputManager inputManager, IRenderPipeline? renderPipeline = null) : ISystem
 {
     private const float WalkSpeed = 10.0f;
     private const float SpeedMultiplier = 2.5f;
@@ -25,15 +25,14 @@ public class PlayerInputSystem(IInputManager inputManager) : ISystem
         if (inputManager.IsKeyDown(Key.Escape))
             inputManager.CloseWindow();
 
-        var playerCtrlPool = registry.GetPool<PlayerControlledComponent>();
+        if ((inputManager.IsKey(Key.F4) && inputManager.IsKeyDown(Key.R)) || (inputManager.IsKeyDown(Key.F4) && inputManager.IsKey(Key.R)))
+            renderPipeline?.CycleReflexMode();
 
-        foreach (var item in registry.GetView<VelocityComponent, TransformComponent>())
+        foreach (var item in registry.GetView<VelocityComponent, TransformComponent, PlayerControlledComponent>())
         {
-            if (!playerCtrlPool.Has(item.Entity.Id)) continue;
-
             ref var velocity = ref item.Comp1;
             ref var transform = ref item.Comp2;
-            ref var playerCtrl = ref playerCtrlPool.Get(item.Entity.Id);
+            ref var playerCtrl = ref item.Comp3;
 
             if (inputManager.IsKeyDown(Key.F1))
                 playerCtrl.IsSpectatorMode = !playerCtrl.IsSpectatorMode;

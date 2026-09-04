@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Numerics;
 
 using HighPerformanceBus;
@@ -10,7 +9,6 @@ using MinecraftPT.Engine.ECS;
 using MinecraftPT.Game.Entities;
 using MinecraftPT.Game.Events;
 using MinecraftPT.Game.World.Blocks.Services;
-using MinecraftPT.Utils.Collections;
 using MinecraftPT.Utils.Math;
 
 using GameWorld = MinecraftPT.Game.World.Environment.World;
@@ -34,7 +32,7 @@ public class ChunkRenderSystem : ISystem, IDisposable, IEventHandler<BlockChange
     private readonly HashSet<Vector3Int> _loadedChunks;
     private readonly HashSet<Vector3Int> _meshedChunks;
 
-    private readonly Lock _stateLock = new();
+    private readonly Lock _worldGenLock = new();
 
     private List<Vector3Int> _chunksToRemove = new(1024);
     private List<Vector3Int> _readyList = new(1024);
@@ -103,7 +101,7 @@ public class ChunkRenderSystem : ISystem, IDisposable, IEventHandler<BlockChange
 
     private void MarkForRemesh(Vector3Int pos)
     {
-        lock (_stateLock)
+        lock (_worldGenLock)
         {
             if (!_activeChunks.Contains(pos)) return;
 
@@ -128,14 +126,14 @@ public class ChunkRenderSystem : ISystem, IDisposable, IEventHandler<BlockChange
         {
             while (_loadQueue.TryTake(out var loadPos, block: true))
             {
-                lock (_stateLock)
+                lock (_worldGenLock)
                 {
                     if (!_activeChunks.Contains(loadPos)) continue;
                 }
 
                 _world.Chunks.LoadChunk(loadPos);
 
-                lock (_stateLock)
+                lock (_worldGenLock)
                 {
                     _loadedChunks.Add(loadPos);
                 }
@@ -162,14 +160,14 @@ public class ChunkRenderSystem : ISystem, IDisposable, IEventHandler<BlockChange
             while (_meshQueue.TryTake(out var meshPos, block: true))
             {
                 bool isActive;
-                lock (_stateLock) isActive = _activeChunks.Contains(meshPos);
+                lock (_worldGenLock) isActive = _activeChunks.Contains(meshPos);
                 if (!isActive) continue;
 
                 var meshData = _mesher.GenerateMesh(meshPos);
 
                 if (!meshData.IsEmpty)
                 {
-                    var gpuMesh = _pipeline.CreateMesh(meshData.Vertices!, meshData.Indices!, meshData.OpaqueIndexCount);
+                    var gpuMesh = _pipeline.CreateMesh(meshData.Vertices!, meshData.Indices!, meshData.OpaqueIndexCount, meshData.OmmIndices);
                     _builtMeshes.Add((meshPos, gpuMesh));
                 }
                 else
@@ -210,7 +208,7 @@ public class ChunkRenderSystem : ISystem, IDisposable, IEventHandler<BlockChange
         if (_textureArray != null)
             _pipeline.BindTextureArray(_textureArray);
 
-        var cam = _engineApp.Camera;
+        ref readonly var cam = ref _engineApp.Camera;
         _loadQueue.UpdateCamera(in cam);
         _meshQueue.UpdateCamera(in cam);
 
@@ -233,7 +231,7 @@ public class ChunkRenderSystem : ISystem, IDisposable, IEventHandler<BlockChange
         while (_builtMeshes.TryTake(out var result, block: false))
         {
             bool isActive;
-            lock (_stateLock) isActive = _activeChunks.Contains(result.Pos);
+            lock (_worldGenLock) isActive = _activeChunks.Contains(result.Pos);
 
             if (!isActive)
             {
@@ -241,52 +239,46 @@ public class ChunkRenderSystem : ISystem, IDisposable, IEventHandler<BlockChange
                 continue;
             }
 
-            lock (_stateLock)
+            if (result.Mesh == null)
             {
-                if (result.Mesh == null)
-                {
-                    if (_meshes.Remove(result.Pos, out var oldMesh)) _pipeline.DeleteMesh(oldMesh);
-                    if (_pendingReadyMeshes.Remove(result.Pos, out var pendingOld)) _pipeline.DeleteMesh(pendingOld);
-                }
-                else
-                {
-                    if (_pendingReadyMeshes.Remove(result.Pos, out var oldPending)) _pipeline.DeleteMesh(oldPending);
-                    _pendingReadyMeshes[result.Pos] = result.Mesh;
-                }
+                if (_meshes.Remove(result.Pos, out var oldMesh)) _pipeline.DeleteMesh(oldMesh);
+                if (_pendingReadyMeshes.Remove(result.Pos, out var pendingOld)) _pipeline.DeleteMesh(pendingOld);
+            }
+            else
+            {
+                if (_pendingReadyMeshes.Remove(result.Pos, out var oldPending)) _pipeline.DeleteMesh(oldPending);
+                _pendingReadyMeshes[result.Pos] = result.Mesh;
             }
         }
 
-        lock (_stateLock)
+        _readyList.Clear();
+
+        foreach (var kvp in _pendingReadyMeshes)
         {
-            _readyList.Clear();
-
-            foreach (var kvp in _pendingReadyMeshes)
+            if (kvp.Value.IsReady)
             {
-                if (kvp.Value.IsReady)
-                {
-                    if (_meshes.Remove(kvp.Key, out var oldMesh)) _pipeline.DeleteMesh(oldMesh);
-                    _meshes[kvp.Key] = kvp.Value;
-                    _readyList.Add(kvp.Key);
-                }
+                if (_meshes.Remove(kvp.Key, out var oldMesh)) _pipeline.DeleteMesh(oldMesh);
+                _meshes[kvp.Key] = kvp.Value;
+                _readyList.Add(kvp.Key);
             }
-            for (int i = 0; i < _readyList.Count; i++) _pendingReadyMeshes.Remove(_readyList[i]);
+        }
+        for (int i = 0; i < _readyList.Count; i++) _pendingReadyMeshes.Remove(_readyList[i]);
 
-            foreach (var kvp in _meshes)
-            {
-                Vector3 position = new(
-                    (kvp.Key.X - _lastPlayerChunk.X) * ChunkSize,
-                    (kvp.Key.Y - _lastPlayerChunk.Y) * ChunkSize,
-                    (kvp.Key.Z - _lastPlayerChunk.Z) * ChunkSize
-                );
+        foreach (var kvp in _meshes)
+        {
+            Vector3 position = new(
+                (kvp.Key.X - _lastPlayerChunk.X) * ChunkSize,
+                (kvp.Key.Y - _lastPlayerChunk.Y) * ChunkSize,
+                (kvp.Key.Z - _lastPlayerChunk.Z) * ChunkSize
+            );
 
-                _pipeline.SubmitDraw(kvp.Value, position);
-            }
+            _pipeline.SubmitDraw(kvp.Value, position);
         }
     }
 
     private void UpdateRenderDistance(Vector3Int center)
     {
-        lock (_stateLock)
+        lock (_worldGenLock)
         {
             for (int x = center.X - RenderDistance; x <= center.X + RenderDistance; x++)
             {
@@ -315,10 +307,14 @@ public class ChunkRenderSystem : ISystem, IDisposable, IEventHandler<BlockChange
                 _activeChunks.Remove(pos);
                 _loadedChunks.Remove(pos);
                 _meshedChunks.Remove(pos);
-
-                if (_meshes.Remove(pos, out var mesh)) _pipeline.DeleteMesh(mesh);
-                if (_pendingReadyMeshes.Remove(pos, out var pMesh)) _pipeline.DeleteMesh(pMesh);
             }
+        }
+
+        for (int i = 0; i < _chunksToRemove.Count; i++)
+        {
+            var pos = _chunksToRemove[i];
+            if (_meshes.Remove(pos, out var mesh)) _pipeline.DeleteMesh(mesh);
+            if (_pendingReadyMeshes.Remove(pos, out var pMesh)) _pipeline.DeleteMesh(pMesh);
         }
     }
 
@@ -337,11 +333,8 @@ public class ChunkRenderSystem : ISystem, IDisposable, IEventHandler<BlockChange
             if (result.Mesh != null) _pipeline.DeleteMesh(result.Mesh);
         }
 
-        lock (_stateLock)
-        {
-            foreach (var mesh in _meshes.Values) _pipeline.DeleteMesh(mesh);
-            foreach (var mesh in _pendingReadyMeshes.Values) _pipeline.DeleteMesh(mesh);
-        }
+        foreach (var mesh in _meshes.Values) _pipeline.DeleteMesh(mesh);
+        foreach (var mesh in _pendingReadyMeshes.Values) _pipeline.DeleteMesh(mesh);
 
         _textureArray?.Dispose();
     }

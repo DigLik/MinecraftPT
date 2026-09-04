@@ -1,12 +1,12 @@
-using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace MinecraftPT.Utils.Collections;
 
 public class SparseSet<T> where T : unmanaged
 {
-    private List<int> _dense = new(1024);
-    private List<T> _elements = new(1024);
+    private readonly List<int> _dense = new(1024);
+    private readonly List<T> _elements = new(1024);
     private int[] _sparse;
 
     public int Count => _dense.Count;
@@ -39,6 +39,13 @@ public class SparseSet<T> where T : unmanaged
         if (id < 0 || id >= _sparse.Length) return false;
         int denseIndex = _sparse[id];
         return denseIndex >= 0 && denseIndex < _dense.Count && _dense[denseIndex] == id;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref T GetUnsafe(int id)
+    {
+        int denseIndex = _sparse[id];
+        return ref CollectionsMarshal.AsSpan(_elements)[denseIndex];
     }
 
     public ref T Get(int id)

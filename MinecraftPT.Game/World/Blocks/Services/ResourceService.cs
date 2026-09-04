@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 using MinecraftPT.Engine.Abstractions.Graphics;
@@ -105,5 +105,22 @@ public class ResourceService : IResourceService
             }
         }
         return pixels;
+    }
+
+    public ushort GetOmmIndex(int materialIndex, int triangleType)
+    {
+        if (materialIndex < 0 || materialIndex >= _materialConfigs.Count)
+            return 0xFFFE; // FullyOpaque
+
+        float type = _materialConfigs[materialIndex].Type;
+        if (type == 1.0f) // Cutout foliage (oak leaves, grass, etc.)
+        {
+            return (ushort)((materialIndex * 4) + (triangleType & 3));
+        }
+        if (type == 2.0f) // Translucent (glass, water)
+        {
+            return 0xFFFC; // FullyUnknownOpaque -> invokes Any-Hit shader
+        }
+        return 0xFFFE; // FullyOpaque
     }
 }

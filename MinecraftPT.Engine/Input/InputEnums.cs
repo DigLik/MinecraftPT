@@ -1,10 +1,10 @@
-﻿namespace MinecraftPT.Engine.Input;
+namespace MinecraftPT.Engine.Input;
 
 public enum Key
 {
     Space, Escape, Enter, Tab,
     W, A, S, D,
-    F1, ShiftLeft, ControlLeft
+    F1, F4, R, ShiftLeft, ControlLeft
 }
 
 public enum MouseButton

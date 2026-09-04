@@ -1,7 +1,6 @@
-﻿using System.Numerics;
+using System.Numerics;
 
 using MinecraftPT.Engine.Abstractions;
-using MinecraftPT.Engine.Abstractions.Graphics;
 using MinecraftPT.Engine.Core;
 using MinecraftPT.Engine.ECS;
 
@@ -54,22 +53,34 @@ public class CameraSystem(EngineApp engine, IWindow window) : ISystem
 
             var sunDir = Vector3.Normalize(new(0.5f, 0.8f, 1.0f));
 
-            var oldCamera = engine.Camera;
-            engine.Camera = new CameraData
+            ref var cam = ref engine.CameraRef;
+
+            if (cam.ViewProjection != default)
             {
-                ViewProjection = viewProj,
-                InverseViewProjection = invViewProj,
-                PrevViewProjection = oldCamera.ViewProjection == default ? viewProj : oldCamera.ViewProjection,
-                ChunkPosition = chunkPos,
-                LocalPosition = localPos,
-                SunDirection = new Vector4(sunDir.X, sunDir.Y, sunDir.Z, 0.0f),
-                CameraUp = orthoUp,
-                CameraRight = right,
-                CameraFwd = forward,
-                SamplesPerPixel = oldCamera.SamplesPerPixel,
-                FrameCount = oldCamera.FrameCount,
-                Seed = oldCamera.Seed
-            };
+                if (chunkPos != cam.ChunkPosition)
+                {
+                    var deltaChunk = chunkPos - cam.ChunkPosition;
+                    var offset = new Vector3(deltaChunk.X * 16.0f, deltaChunk.Y * 16.0f, deltaChunk.Z * 16.0f);
+                    cam.PrevViewProjection = Matrix4x4.CreateTranslation(offset) * cam.ViewProjection;
+                }
+                else
+                {
+                    cam.PrevViewProjection = cam.ViewProjection;
+                }
+            }
+            else
+            {
+                cam.PrevViewProjection = viewProj;
+            }
+
+            cam.ViewProjection = viewProj;
+            cam.InverseViewProjection = invViewProj;
+            cam.ChunkPosition = chunkPos;
+            cam.LocalPosition = localPos;
+            cam.SunDirection = new Vector4(sunDir.X, sunDir.Y, sunDir.Z, 0.0f);
+            cam.CameraUp = orthoUp;
+            cam.CameraRight = right;
+            cam.CameraFwd = forward;
 
             break;
         }

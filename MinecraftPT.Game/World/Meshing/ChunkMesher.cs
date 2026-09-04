@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
@@ -42,6 +41,7 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
         List<ChunkVertex> vertices = new(8192);
         List<ushort> opaqueIndices = new(12288);
         List<ushort> transparentIndices = new(2048);
+        List<ushort> ommIndices = new(2048 / 3);
 
         int grassOverlayId = resourceService.GetSpecialMaterialIndex(SpecialMaterialId.GrassSideOverlay);
         ReadOnlySpan<BlockDefinition> defs = blockService.GetDefinitionsFast();
@@ -73,21 +73,21 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
                     if (zMax)
                     {
                         var neighbor = defs[(int)GetNeighborBlock(ref nPosZ, x | (y << 8))];
-                        if (ShouldRenderFace(in neighbor, GetOppositeFace(0)))
+                        if (ShouldRenderFace(in currentDef, in neighbor, GetOppositeFace(0)))
                         {
                             int textureId = currentDef.Textures.Top;
-                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, x, y, z, 0, currentId, in currentDef, grassOverlayId);
-                            else BuildFace(ref vertices, ref transparentIndices, x, y, z, 0, currentId, in currentDef, grassOverlayId);
+                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, null, x, y, z, 0, currentId, in currentDef, grassOverlayId, false);
+                            else BuildFace(ref vertices, ref transparentIndices, ommIndices, x, y, z, 0, currentId, in currentDef, grassOverlayId, false);
                         }
                     }
                     else
                     {
                         var neighbor = defs[(int)(isUniform ? uniformId : blocks![index + 16])];
-                        if (ShouldRenderFace(in neighbor, GetOppositeFace(0)))
+                        if (ShouldRenderFace(in currentDef, in neighbor, GetOppositeFace(0)))
                         {
                             int textureId = currentDef.Textures.Top;
-                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, x, y, z, 0, currentId, in currentDef, grassOverlayId);
-                            else BuildFace(ref vertices, ref transparentIndices, x, y, z, 0, currentId, in currentDef, grassOverlayId);
+                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, null, x, y, z, 0, currentId, in currentDef, grassOverlayId, false);
+                            else BuildFace(ref vertices, ref transparentIndices, ommIndices, x, y, z, 0, currentId, in currentDef, grassOverlayId, false);
                         }
                     }
 
@@ -97,21 +97,21 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
                         if (zMin)
                         {
                             var neighbor = defs[(int)GetNeighborBlock(ref nNegZ, x | 240 | (y << 8))];
-                            if (ShouldRenderFace(in neighbor, GetOppositeFace(1)))
+                            if (ShouldRenderFace(in currentDef, in neighbor, GetOppositeFace(1)))
                             {
                                 int textureId = currentDef.Textures.Bottom;
-                                if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, x, y, z, 1, currentId, in currentDef, grassOverlayId);
-                                else BuildFace(ref vertices, ref transparentIndices, x, y, z, 1, currentId, in currentDef, grassOverlayId);
+                                if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, null, x, y, z, 1, currentId, in currentDef, grassOverlayId, false);
+                                else BuildFace(ref vertices, ref transparentIndices, ommIndices, x, y, z, 1, currentId, in currentDef, grassOverlayId, false);
                             }
                         }
                         else
                         {
                             var neighbor = defs[(int)(isUniform ? uniformId : blocks![index - 16])];
-                            if (ShouldRenderFace(in neighbor, GetOppositeFace(1)))
+                            if (ShouldRenderFace(in currentDef, in neighbor, GetOppositeFace(1)))
                             {
                                 int textureId = currentDef.Textures.Bottom;
-                                if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, x, y, z, 1, currentId, in currentDef, grassOverlayId);
-                                else BuildFace(ref vertices, ref transparentIndices, x, y, z, 1, currentId, in currentDef, grassOverlayId);
+                                if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, null, x, y, z, 1, currentId, in currentDef, grassOverlayId, false);
+                                else BuildFace(ref vertices, ref transparentIndices, ommIndices, x, y, z, 1, currentId, in currentDef, grassOverlayId, false);
                             }
                         }
                     }
@@ -119,84 +119,84 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
                     if (xMin)
                     {
                         var neighbor = defs[(int)GetNeighborBlock(ref nNegX, 15 | (z << 4) | (y << 8))];
-                        if (ShouldRenderFace(in neighbor, GetOppositeFace(2)))
+                        if (ShouldRenderFace(in currentDef, in neighbor, GetOppositeFace(2)))
                         {
                             int textureId = currentDef.Textures.Side;
-                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, x, y, z, 2, currentId, in currentDef, grassOverlayId);
-                            else BuildFace(ref vertices, ref transparentIndices, x, y, z, 2, currentId, in currentDef, grassOverlayId);
+                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, null, x, y, z, 2, currentId, in currentDef, grassOverlayId, false);
+                            else BuildFace(ref vertices, ref transparentIndices, ommIndices, x, y, z, 2, currentId, in currentDef, grassOverlayId, false);
                         }
                     }
                     else
                     {
                         var neighbor = defs[(int)(isUniform ? uniformId : blocks![index - 1])];
-                        if (ShouldRenderFace(in neighbor, GetOppositeFace(2)))
+                        if (ShouldRenderFace(in currentDef, in neighbor, GetOppositeFace(2)))
                         {
                             int textureId = currentDef.Textures.Side;
-                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, x, y, z, 2, currentId, in currentDef, grassOverlayId);
-                            else BuildFace(ref vertices, ref transparentIndices, x, y, z, 2, currentId, in currentDef, grassOverlayId);
+                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, null, x, y, z, 2, currentId, in currentDef, grassOverlayId, false);
+                            else BuildFace(ref vertices, ref transparentIndices, ommIndices, x, y, z, 2, currentId, in currentDef, grassOverlayId, false);
                         }
                     }
 
                     if (xMax)
                     {
                         var neighbor = defs[(int)GetNeighborBlock(ref nPosX, (z << 4) | (y << 8))];
-                        if (ShouldRenderFace(in neighbor, GetOppositeFace(3)))
+                        if (ShouldRenderFace(in currentDef, in neighbor, GetOppositeFace(3)))
                         {
                             int textureId = currentDef.Textures.Side;
-                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, x, y, z, 3, currentId, in currentDef, grassOverlayId);
-                            else BuildFace(ref vertices, ref transparentIndices, x, y, z, 3, currentId, in currentDef, grassOverlayId);
+                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, null, x, y, z, 3, currentId, in currentDef, grassOverlayId, false);
+                            else BuildFace(ref vertices, ref transparentIndices, ommIndices, x, y, z, 3, currentId, in currentDef, grassOverlayId, false);
                         }
                     }
                     else
                     {
                         var neighbor = defs[(int)(isUniform ? uniformId : blocks![index + 1])];
-                        if (ShouldRenderFace(in neighbor, GetOppositeFace(3)))
+                        if (ShouldRenderFace(in currentDef, in neighbor, GetOppositeFace(3)))
                         {
                             int textureId = currentDef.Textures.Side;
-                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, x, y, z, 3, currentId, in currentDef, grassOverlayId);
-                            else BuildFace(ref vertices, ref transparentIndices, x, y, z, 3, currentId, in currentDef, grassOverlayId);
+                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, null, x, y, z, 3, currentId, in currentDef, grassOverlayId, false);
+                            else BuildFace(ref vertices, ref transparentIndices, ommIndices, x, y, z, 3, currentId, in currentDef, grassOverlayId, false);
                         }
                     }
 
                     if (yMax)
                     {
                         var neighbor = defs[(int)GetNeighborBlock(ref nPosY, x | (z << 4))];
-                        if (ShouldRenderFace(in neighbor, GetOppositeFace(4)))
+                        if (ShouldRenderFace(in currentDef, in neighbor, GetOppositeFace(4)))
                         {
                             int textureId = currentDef.Textures.Side;
-                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, x, y, z, 4, currentId, in currentDef, grassOverlayId);
-                            else BuildFace(ref vertices, ref transparentIndices, x, y, z, 4, currentId, in currentDef, grassOverlayId);
+                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, null, x, y, z, 4, currentId, in currentDef, grassOverlayId, false);
+                            else BuildFace(ref vertices, ref transparentIndices, ommIndices, x, y, z, 4, currentId, in currentDef, grassOverlayId, false);
                         }
                     }
                     else
                     {
                         var neighbor = defs[(int)(isUniform ? uniformId : blocks![index + 256])];
-                        if (ShouldRenderFace(in neighbor, GetOppositeFace(4)))
+                        if (ShouldRenderFace(in currentDef, in neighbor, GetOppositeFace(4)))
                         {
                             int textureId = currentDef.Textures.Side;
-                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, x, y, z, 4, currentId, in currentDef, grassOverlayId);
-                            else BuildFace(ref vertices, ref transparentIndices, x, y, z, 4, currentId, in currentDef, grassOverlayId);
+                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, null, x, y, z, 4, currentId, in currentDef, grassOverlayId, false);
+                            else BuildFace(ref vertices, ref transparentIndices, ommIndices, x, y, z, 4, currentId, in currentDef, grassOverlayId, false);
                         }
                     }
 
                     if (yMin)
                     {
                         var neighbor = defs[(int)GetNeighborBlock(ref nNegY, x | (z << 4) | 3840)];
-                        if (ShouldRenderFace(in neighbor, GetOppositeFace(5)))
+                        if (ShouldRenderFace(in currentDef, in neighbor, GetOppositeFace(5)))
                         {
                             int textureId = currentDef.Textures.Side;
-                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, x, y, z, 5, currentId, in currentDef, grassOverlayId);
-                            else BuildFace(ref vertices, ref transparentIndices, x, y, z, 5, currentId, in currentDef, grassOverlayId);
+                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, null, x, y, z, 5, currentId, in currentDef, grassOverlayId, false);
+                            else BuildFace(ref vertices, ref transparentIndices, ommIndices, x, y, z, 5, currentId, in currentDef, grassOverlayId, false);
                         }
                     }
                     else
                     {
                         var neighbor = defs[(int)(isUniform ? uniformId : blocks![index - 256])];
-                        if (ShouldRenderFace(in neighbor, GetOppositeFace(5)))
+                        if (ShouldRenderFace(in currentDef, in neighbor, GetOppositeFace(5)))
                         {
                             int textureId = currentDef.Textures.Side;
-                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, x, y, z, 5, currentId, in currentDef, grassOverlayId);
-                            else BuildFace(ref vertices, ref transparentIndices, x, y, z, 5, currentId, in currentDef, grassOverlayId);
+                            if (resourceService.IsMaterialOpaque(textureId)) BuildFace(ref vertices, ref opaqueIndices, null, x, y, z, 5, currentId, in currentDef, grassOverlayId, false);
+                            else BuildFace(ref vertices, ref transparentIndices, ommIndices, x, y, z, 5, currentId, in currentDef, grassOverlayId, false);
                         }
                     }
                 }
@@ -211,11 +211,17 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
 
         if (vertices.Count > 0)
         {
-            return new ChunkMesh { Vertices = vertices, Indices = opaqueIndices, OpaqueIndexCount = opaqueCount };
+            return new ChunkMesh
+            {
+                Vertices = vertices,
+                Indices = opaqueIndices,
+                OpaqueIndexCount = opaqueCount,
+                OmmIndices = ommIndices.Count > 0 ? ommIndices : null
+            };
         }
         else
         {
-            return new ChunkMesh { Vertices = null, Indices = null, OpaqueIndexCount = 0 };
+            return new ChunkMesh { Vertices = null, Indices = null, OpaqueIndexCount = 0, OmmIndices = null };
         }
     }
 
@@ -239,9 +245,20 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool ShouldRenderFace(in BlockDefinition neighbor, int neighborFaceIndex)
+    private bool ShouldRenderFace(in BlockDefinition currentDef, in BlockDefinition neighbor, int neighborFaceIndex)
     {
         if (neighbor.Id == BlockId.Air) return true;
+
+        if (neighbor.Transparency == BlockTransparency.Foliage)
+        {
+            return true;
+        }
+
+        if (currentDef.Transparency == BlockTransparency.Transparent &&
+            neighbor.Transparency == BlockTransparency.Transparent)
+        {
+            return currentDef.Id != neighbor.Id;
+        }
 
         int textureId = neighborFaceIndex switch
         {
@@ -254,10 +271,11 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void BuildFace(
-        ref List<ChunkVertex> vertices, ref List<ushort> indices,
+    private void BuildFace(
+        ref List<ChunkVertex> vertices, ref List<ushort> indices, List<ushort>? ommIndices,
         int x, int y, int z, int faceIndex,
-        BlockId currentId, ref readonly BlockDefinition currentDef, int grassOverlayId)
+        BlockId currentId, ref readonly BlockDefinition currentDef, int grassOverlayId,
+        bool doubleSided = false)
     {
         int textureId = faceIndex switch
         {
@@ -295,11 +313,35 @@ public unsafe class ChunkMesher(ChunkManager chunkManager, IBlockService blockSe
         vertices.Add(new ChunkVertex(x + fVerts[2].X, y + fVerts[2].Y, z + fVerts[2].Z, basePacked | (2u << 24)));
         vertices.Add(new ChunkVertex(x + fVerts[3].X, y + fVerts[3].Y, z + fVerts[3].Z, basePacked | (3u << 24)));
 
+        // Лицевая сторона (нормаль наружу)
         indices.Add((ushort)(indexOffset + 0));
         indices.Add((ushort)(indexOffset + 1));
         indices.Add((ushort)(indexOffset + 2));
         indices.Add((ushort)(indexOffset + 2));
         indices.Add((ushort)(indexOffset + 3));
         indices.Add((ushort)(indexOffset + 0));
+
+        if (ommIndices != null)
+        {
+            ommIndices.Add(resourceService.GetOmmIndex(textureId, 0));
+            ommIndices.Add(resourceService.GetOmmIndex(textureId, 1));
+        }
+
+        if (doubleSided)
+        {
+            // Обратная сторона (нормаль внутрь, обратная намотка)
+            indices.Add((ushort)(indexOffset + 0));
+            indices.Add((ushort)(indexOffset + 3));
+            indices.Add((ushort)(indexOffset + 2));
+            indices.Add((ushort)(indexOffset + 2));
+            indices.Add((ushort)(indexOffset + 1));
+            indices.Add((ushort)(indexOffset + 0));
+
+            if (ommIndices != null)
+            {
+                ommIndices.Add(resourceService.GetOmmIndex(textureId, 2));
+                ommIndices.Add(resourceService.GetOmmIndex(textureId, 3));
+            }
+        }
     }
 }

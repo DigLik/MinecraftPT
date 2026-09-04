@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
+
 using Microsoft.Extensions.Logging;
 
 using MinecraftPT.Engine.Abstractions;
@@ -23,15 +24,18 @@ public sealed partial class EngineApp : IDisposable
 
     public Registry Registry { get; } = new();
     public IRenderPipeline RenderPipeline => _renderPipeline;
-    public CameraData Camera { get; set; } = new()
+    private CameraData _camera = new()
     {
         ViewProjection = Matrix4x4.Identity,
         InverseViewProjection = Matrix4x4.Identity,
         ChunkPosition = Vector3Int.Zero,
         LocalPosition = Vector3.Zero,
         SunDirection = new(0, 0, 1, 0),
-        SamplesPerPixel = 2
+        SamplesPerPixel = 1
     };
+
+    public ref CameraData CameraRef => ref _camera;
+    public ref readonly CameraData Camera => ref _camera;
 
     [LoggerMessage(EventId = 1, Level = LogLevel.Debug, Message = "FPS: {Fps}")]
     private partial void LogFps(double fps);
@@ -74,7 +78,7 @@ public sealed partial class EngineApp : IDisposable
         }
         else _frameCounter++;
 
-        _renderPipeline.RenderFrame(Camera);
+        _renderPipeline.RenderFrame(in _camera);
     }
 
     private void OnFramebufferResize(Vector2Int newSize) => _renderPipeline.OnFramebufferResize(newSize);

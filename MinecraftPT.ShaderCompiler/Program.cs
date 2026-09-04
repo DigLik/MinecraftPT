@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
+
 using Silk.NET.Direct3D.Compilers;
+
 using DxcBuffer = Silk.NET.Direct3D.Compilers.Buffer;
 
 namespace MinecraftPT.ShaderCompiler;
@@ -10,12 +12,12 @@ internal unsafe class Program
     {
         if (args.Length < 2)
         {
-            Console.WriteLine("Usage: MinecraftPT.ShaderCompiler <input_hlsl_path> <output_spv_path>");
+            Console.WriteLine("Usage: MinecraftPT.ShaderCompiler <input_hlsl_path> <output_spv_path> [-I <include_dir>]...");
             return 1;
         }
 
-        string inputPath = Path.GetFullPath(args[0]);
-        string outputPath = Path.GetFullPath(args[1]);
+        string inputPath = Path.GetFullPath(args[0].Trim('"', '\''));
+        string outputPath = Path.GetFullPath(args[1].Trim('"', '\''));
 
         if (!File.Exists(inputPath))
         {
@@ -23,7 +25,31 @@ internal unsafe class Program
             return 1;
         }
 
+        var includeDirs = new List<string>();
+        string? inputDir = Path.GetDirectoryName(inputPath);
+        if (!string.IsNullOrEmpty(inputDir))
+        {
+            includeDirs.Add(inputDir);
+        }
+
+        for (int i = 2; i < args.Length; i++)
+        {
+            if (args[i] == "-I" && i + 1 < args.Length)
+            {
+                string rawDir = args[++i].Trim('"', '\'');
+                if (!string.IsNullOrWhiteSpace(rawDir))
+                {
+                    string dir = Path.GetFullPath(rawDir);
+                    if (!includeDirs.Contains(dir))
+                    {
+                        includeDirs.Add(dir);
+                    }
+                }
+            }
+        }
+
         Console.WriteLine($"Compiling: {inputPath} -> {outputPath}");
+        Console.WriteLine($"Include directories: {string.Join(", ", includeDirs)}");
 
         try
         {
@@ -59,7 +85,15 @@ internal unsafe class Program
                 "-enable-16bit-types"
             };
 
+            foreach (var inc in includeDirs)
+            {
+                compilerArgs.Add("-I");
+                compilerArgs.Add(inc);
+            }
+
             Console.WriteLine($"Compiler profile: {profile}, args: {string.Join(" ", compilerArgs)}");
+
+            using var includeHandler = new DxcIncludeHandler(includeDirs);
 
             // 5. Compile
             fixed (byte* pSource = sourceBytes)
@@ -81,7 +115,7 @@ internal unsafe class Program
                         in dxcBuffer,
                         (char**)pArgs,
                         (uint)compilerArgs.Count,
-                        null,
+                        includeHandler.NativePointer,
                         ref riidResult,
                         ref pResult
                     );

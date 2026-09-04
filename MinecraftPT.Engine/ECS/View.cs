@@ -1,4 +1,4 @@
-﻿namespace MinecraftPT.Engine.ECS;
+namespace MinecraftPT.Engine.ECS;
 
 public readonly ref struct QueryItem<T1>(Entity entity, ref T1 comp1)
 {
@@ -40,7 +40,7 @@ public readonly ref struct View<T1>(Registry registry)
             get
             {
                 int entityId = _entities[_index];
-                return new QueryItem<T1>(new Entity(entityId), ref pool1.Get(entityId));
+                return new QueryItem<T1>(new Entity(entityId), ref pool1.GetUnsafe(entityId));
             }
         }
     }
@@ -89,8 +89,8 @@ public readonly ref struct View<T1, T2>(Registry registry)
                 int entityId = _entities[_index];
                 return new QueryItem<T1, T2>(
                     new Entity(entityId),
-                    ref _pool1.Get(entityId),
-                    ref _pool2.Get(entityId)
+                    ref _pool1.GetUnsafe(entityId),
+                    ref _pool2.GetUnsafe(entityId)
                 );
             }
         }
@@ -168,9 +168,9 @@ public readonly ref struct View<T1, T2, T3>(Registry registry)
                 int entityId = _entities[_index];
                 return new QueryItem<T1, T2, T3>(
                     new Entity(entityId),
-                    ref _pool1.Get(entityId),
-                    ref _pool2.Get(entityId),
-                    ref _pool3.Get(entityId)
+                    ref _pool1.GetUnsafe(entityId),
+                    ref _pool2.GetUnsafe(entityId),
+                    ref _pool3.GetUnsafe(entityId)
                 );
             }
         }

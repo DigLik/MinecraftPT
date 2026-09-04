@@ -1,16 +1,4 @@
-struct Payload {
-    float3 hitPos;
-    float hitDistance;
-    float3 normal;
-    float roughness;
-    float3 albedo;
-    float metallic;
-    float3 emission;
-    float opacity;
-    float ior;
-    float absorption;
-    float frontFacing;
-};
+#include "common.hlsli"
 
 [shader("miss")]
 void main(inout Payload payload) {

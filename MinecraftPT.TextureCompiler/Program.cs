@@ -1,4 +1,5 @@
 using StbImageSharp;
+
 using ZstdSharp;
 
 if (args.Length < 2)

@@ -1,4 +1,4 @@
-﻿using MinecraftPT.Engine.Abstractions.Graphics;
+using MinecraftPT.Engine.Abstractions.Graphics;
 
 using Silk.NET.Vulkan;
 
@@ -29,10 +29,14 @@ public class MeshAllocation(
 
     internal DynamicMeshPool.BufferChunk VertexChunk = null!;
     internal DynamicMeshPool.BufferChunk IndexChunk = null!;
+    internal DynamicMeshPool.BufferChunk? OmmIndexChunk;
     internal DynamicMeshPool.BufferChunk BlasChunk = null!;
 
     public ulong VertexAddress => VertexChunk.Buffer.DeviceAddress;
     public ulong IndexAddress => IndexChunk.Buffer.DeviceAddress;
+    internal ulong OmmIndexByteOffset { get; set; }
+    internal ulong OmmIndexByteSize { get; set; }
+    public ulong OmmIndexAddress => OmmIndexChunk?.Buffer.DeviceAddress ?? 0;
 
     public ulong ReadySyncValue { get; internal set; } = ulong.MaxValue;
     public bool IsReady => pool.GetCompletedValue() >= ReadySyncValue;

@@ -7,5 +7,6 @@
   <Project Path="MinecraftPT.Utils/MinecraftPT.Utils.csproj" Id="043032ce-87e2-41a5-b0b3-27f9d2320ffd" />
   <Project Path="MinecraftPT.Streamline/MinecraftPT.Streamline.csproj" />
   <Project Path="MinecraftPT.ShaderCompiler/MinecraftPT.ShaderCompiler.csproj" />
+  <Project Path="MinecraftPT.Tests/MinecraftPT.Tests.csproj" />
   <Project Path="MinecraftPT/MinecraftPT.csproj" />
 </Solution>

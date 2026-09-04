@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 
 using Silk.NET.Core;
 using Silk.NET.Core.Native;
@@ -22,6 +22,8 @@ public unsafe class VulkanDevice : IDisposable
     public KhrAccelerationStructure KhrAccelerationStructure;
     public KhrRayTracingPipeline KhrRayTracingPipeline;
     public KhrDeferredHostOperations KhrDeferredHostOperations;
+    public Silk.NET.Vulkan.Extensions.EXT.ExtOpacityMicromap? ExtOpacityMicromap;
+    public bool IsOpacityMicromapSupported => ExtOpacityMicromap != null;
 
 #if DEBUG
     public ExtDebugUtils? ExtDebugUtils;
@@ -35,6 +37,7 @@ public unsafe class VulkanDevice : IDisposable
     public Queue GraphicsQueue;
     public Queue PresentQueue;
     public Queue TransferQueue;
+    public Queue ComputeQueue;
     public SurfaceKHR Surface;
 
     public CommandPool TransferCommandPool;
@@ -42,9 +45,11 @@ public unsafe class VulkanDevice : IDisposable
     public uint GraphicsFamilyIndex;
     public uint PresentFamilyIndex;
     public uint TransferFamilyIndex;
+    public uint ComputeFamilyIndex;
 
     public Lock QueueLock = new();
     public Lock TransferQueueLock = new();
+    public Lock ComputeQueueLock = new();
 
     public VulkanDevice(void* windowHandle)
     {
@@ -60,6 +65,7 @@ public unsafe class VulkanDevice : IDisposable
         if (!Vk.TryGetDeviceExtension(Instance, Device, out KhrAccelerationStructure)) throw new Exception("VK_KHR_acceleration_structure not found.");
         if (!Vk.TryGetDeviceExtension(Instance, Device, out KhrRayTracingPipeline)) throw new Exception("VK_KHR_ray_tracing_pipeline not found.");
         if (!Vk.TryGetDeviceExtension(Instance, Device, out KhrDeferredHostOperations)) throw new Exception("VK_KHR_deferred_host_operations not found.");
+        Vk.TryGetDeviceExtension(Instance, Device, out ExtOpacityMicromap);
     }
 
     private void CreateInstance()
@@ -69,63 +75,66 @@ public unsafe class VulkanDevice : IDisposable
             throw new Exception("Validation layers requested, but not available!");
 #endif
 
-        ApplicationInfo appInfo = new()
+        fixed (byte* pAppName = "MinecraftPT\0"u8, pEngineName = "MinecraftPT Engine\0"u8)
         {
-            SType = StructureType.ApplicationInfo,
-            PApplicationName = (byte*)SilkMarshal.StringToPtr("MinecraftPT"),
-            ApplicationVersion = new Version32(1, 0, 0),
-            PEngineName = (byte*)SilkMarshal.StringToPtr("MinecraftPT Engine"),
-            EngineVersion = new Version32(1, 0, 0),
-            ApiVersion = new Version32(1, 3, 0)
-        };
+            ApplicationInfo appInfo = new()
+            {
+                SType = StructureType.ApplicationInfo,
+                PApplicationName = pAppName,
+                ApplicationVersion = new Version32(1, 0, 0),
+                PEngineName = pEngineName,
+                EngineVersion = new Version32(1, 0, 0),
+                ApiVersion = new Version32(1, 3, 0)
+            };
 
-        var glfw = Glfw.GetApi();
-        byte** glfwExtensions = glfw.GetRequiredInstanceExtensions(out uint glfwExtensionCount);
+            var glfw = Glfw.GetApi();
+            byte** glfwExtensions = glfw.GetRequiredInstanceExtensions(out uint glfwExtensionCount);
 
-        var extensions = new List<string>();
+            var extensions = new List<string>();
 
-        for (int i = 0; i < glfwExtensionCount; i++)
-            extensions.Add(Marshal.PtrToStringAnsi((IntPtr)glfwExtensions[i])!);
+            for (int i = 0; i < glfwExtensionCount; i++)
+                extensions.Add(Marshal.PtrToStringAnsi((IntPtr)glfwExtensions[i])!);
 
 #if DEBUG
-        extensions.Add(ExtDebugUtils.ExtensionName);
+            extensions.Add(ExtDebugUtils.ExtensionName);
 #endif
 
-        // Extensions required by Streamline/NGX
-        extensions.Add("VK_KHR_get_physical_device_properties2");
-        extensions.Add("VK_KHR_external_memory_capabilities");
-        extensions.Add("VK_KHR_external_semaphore_capabilities");
+            // Extensions required by Streamline/NGX
+            extensions.Add("VK_KHR_get_physical_device_properties2");
+            extensions.Add("VK_KHR_external_memory_capabilities");
+            extensions.Add("VK_KHR_external_semaphore_capabilities");
 
-        var pExtensions = SilkMarshal.StringArrayToPtr([.. extensions]);
+            var pExtensions = SilkMarshal.StringArrayToPtr([.. extensions]);
 
-        InstanceCreateInfo createInfo = new()
-        {
-            SType = StructureType.InstanceCreateInfo,
-            PApplicationInfo = &appInfo,
-            EnabledExtensionCount = (uint)extensions.Count,
-            PpEnabledExtensionNames = (byte**)pExtensions,
-        };
+            InstanceCreateInfo createInfo = new()
+            {
+                SType = StructureType.InstanceCreateInfo,
+                PApplicationInfo = &appInfo,
+                EnabledExtensionCount = (uint)extensions.Count,
+                PpEnabledExtensionNames = (byte**)pExtensions,
+            };
 
 #if DEBUG
-        var pValidationLayers = SilkMarshal.StringArrayToPtr(_validationLayers);
-        createInfo.EnabledLayerCount = (uint)_validationLayers.Length;
-        createInfo.PpEnabledLayerNames = (byte**)pValidationLayers;
+            var pValidationLayers = SilkMarshal.StringArrayToPtr(_validationLayers);
+            createInfo.EnabledLayerCount = (uint)_validationLayers.Length;
+            createInfo.PpEnabledLayerNames = (byte**)pValidationLayers;
 
-        DebugUtilsMessengerCreateInfoEXT debugCreateInfo = new();
-        PopulateDebugMessengerCreateInfo(ref debugCreateInfo);
-        createInfo.PNext = &debugCreateInfo;
+            DebugUtilsMessengerCreateInfoEXT debugCreateInfo = new();
+            PopulateDebugMessengerCreateInfo(ref debugCreateInfo);
+            createInfo.PNext = &debugCreateInfo;
 #else
-        createInfo.EnabledLayerCount = 0;
-        createInfo.PNext = null;
+            createInfo.EnabledLayerCount = 0;
+            createInfo.PNext = null;
 #endif
 
-        if (Vk.CreateInstance(in createInfo, null, out Instance) != Result.Success)
-            throw new Exception("Failed to create Vulkan Instance!");
+            if (Vk.CreateInstance(in createInfo, null, out Instance) != Result.Success)
+                throw new Exception("Failed to create Vulkan Instance!");
 
-        SilkMarshal.Free(pExtensions);
+            SilkMarshal.Free(pExtensions);
 #if DEBUG
-        SilkMarshal.Free((nint)pValidationLayers);
+            SilkMarshal.Free((nint)pValidationLayers);
 #endif
+        }
 
         if (!Vk.TryGetInstanceExtension(Instance, out KhrSurface))
             throw new Exception("Vulkan KHR_surface extension not found.");
@@ -233,6 +242,7 @@ public unsafe class VulkanDevice : IDisposable
             uint? graphicsFamily = null;
             uint? presentFamily = null;
             uint? transferFamily = null;
+            uint? computeFamily = null;
 
             for (uint i = 0; i < queueFamilyCount; i++)
             {
@@ -241,6 +251,12 @@ public unsafe class VulkanDevice : IDisposable
                 KhrSurface.GetPhysicalDeviceSurfaceSupport(device, i, Surface, out var presentSupport);
                 if (presentSupport) presentFamily = i;
 
+                if (queueFamilies[i].QueueFlags.HasFlag(QueueFlags.ComputeBit) &&
+                    !queueFamilies[i].QueueFlags.HasFlag(QueueFlags.GraphicsBit))
+                {
+                    computeFamily = i;
+                }
+
                 if (queueFamilies[i].QueueFlags.HasFlag(QueueFlags.TransferBit) &&
                     !queueFamilies[i].QueueFlags.HasFlag(QueueFlags.GraphicsBit) &&
                     !queueFamilies[i].QueueFlags.HasFlag(QueueFlags.ComputeBit))
@@ -248,7 +264,7 @@ public unsafe class VulkanDevice : IDisposable
                     transferFamily = i;
                 }
 
-                if (graphicsFamily.HasValue && presentFamily.HasValue && transferFamily.HasValue) break;
+                if (graphicsFamily.HasValue && presentFamily.HasValue && transferFamily.HasValue && computeFamily.HasValue) break;
             }
 
             if (graphicsFamily.HasValue && presentFamily.HasValue)
@@ -256,7 +272,8 @@ public unsafe class VulkanDevice : IDisposable
                 PhysicalDevice = device;
                 GraphicsFamilyIndex = graphicsFamily.Value;
                 PresentFamilyIndex = presentFamily.Value;
-                TransferFamilyIndex = transferFamily ?? graphicsFamily.Value;
+                ComputeFamilyIndex = computeFamily ?? graphicsFamily.Value;
+                TransferFamilyIndex = transferFamily ?? computeFamily ?? graphicsFamily.Value;
                 return;
             }
         }
@@ -265,19 +282,44 @@ public unsafe class VulkanDevice : IDisposable
 
     private void CreateLogicalDevice()
     {
-        var uniqueQueueFamilies = new HashSet<uint> { GraphicsFamilyIndex, PresentFamilyIndex, TransferFamilyIndex };
-        var queueCreateInfos = new DeviceQueueCreateInfo[uniqueQueueFamilies.Count];
-        float queuePriority = 1.0f;
+        uint queueFamilyPropCount = 0;
+        Vk.GetPhysicalDeviceQueueFamilyProperties(PhysicalDevice, ref queueFamilyPropCount, null);
+        var queueFamilyProps = new QueueFamilyProperties[queueFamilyPropCount];
+        Vk.GetPhysicalDeviceQueueFamilyProperties(PhysicalDevice, ref queueFamilyPropCount, out queueFamilyProps[0]);
+
+        var familyQueueAlloc = new Dictionary<uint, uint>();
+        uint GetNextQueueIndex(uint familyIndex)
+        {
+            familyQueueAlloc.TryGetValue(familyIndex, out uint currentAllocated);
+            uint maxQueues = queueFamilyProps[familyIndex].QueueCount;
+            if (currentAllocated < maxQueues)
+            {
+                familyQueueAlloc[familyIndex] = currentAllocated + 1;
+                return currentAllocated;
+            }
+            return 0;
+        }
+
+        uint graphicsQueueIndex = GetNextQueueIndex(GraphicsFamilyIndex);
+        uint presentQueueIndex = (PresentFamilyIndex == GraphicsFamilyIndex)
+            ? graphicsQueueIndex
+            : GetNextQueueIndex(PresentFamilyIndex);
+        uint computeQueueIndex = GetNextQueueIndex(ComputeFamilyIndex);
+        uint transferQueueIndex = GetNextQueueIndex(TransferFamilyIndex);
+
+        var queueCreateInfos = new DeviceQueueCreateInfo[familyQueueAlloc.Count];
+        float* pPriorities = stackalloc float[32];
+        for (int p = 0; p < 32; p++) pPriorities[p] = 1.0f;
 
         int i = 0;
-        foreach (var queueFamily in uniqueQueueFamilies)
+        foreach (var (queueFamily, count) in familyQueueAlloc)
         {
             queueCreateInfos[i++] = new DeviceQueueCreateInfo
             {
                 SType = StructureType.DeviceQueueCreateInfo,
                 QueueFamilyIndex = queueFamily,
-                QueueCount = 1,
-                PQueuePriorities = &queuePriority
+                QueueCount = count,
+                PQueuePriorities = pPriorities
             };
         }
 
@@ -334,6 +376,12 @@ public unsafe class VulkanDevice : IDisposable
             enabledExtensions.Add("VK_NVX_image_view_handle");
         }
 
+        bool ommSupported = supportedExtensions.Contains("VK_EXT_opacity_micromap");
+        if (ommSupported)
+        {
+            enabledExtensions.Add("VK_EXT_opacity_micromap");
+        }
+
         var deviceExtensions = enabledExtensions.ToArray();
         var pDeviceExtensions = SilkMarshal.StringArrayToPtr(deviceExtensions);
 
@@ -355,6 +403,7 @@ public unsafe class VulkanDevice : IDisposable
         {
             SType = StructureType.PhysicalDeviceVulkan13Features,
             Synchronization2 = Vk.True,
+            PrivateData = Vk.True,
             PNext = &vk12Features
         };
 
@@ -365,11 +414,18 @@ public unsafe class VulkanDevice : IDisposable
             PNext = &vk13Features
         };
 
+        PhysicalDeviceOpacityMicromapFeaturesEXT ommFeatures = new()
+        {
+            SType = StructureType.PhysicalDeviceOpacityMicromapFeaturesExt,
+            Micromap = ommSupported ? Vk.True : Vk.False,
+            PNext = &asFeatures
+        };
+
         PhysicalDeviceRayTracingPipelineFeaturesKHR rtFeatures = new()
         {
             SType = StructureType.PhysicalDeviceRayTracingPipelineFeaturesKhr,
             RayTracingPipeline = Vk.True,
-            PNext = &asFeatures
+            PNext = ommSupported ? &ommFeatures : &asFeatures
         };
 
         PhysicalDeviceRayQueryFeaturesKHR rqFeatures = new()
@@ -404,12 +460,14 @@ public unsafe class VulkanDevice : IDisposable
 
         SilkMarshal.Free(pDeviceExtensions);
 
-        Vk.GetDeviceQueue(Device, GraphicsFamilyIndex, 0, out GraphicsQueue);
-        Vk.GetDeviceQueue(Device, PresentFamilyIndex, 0, out PresentQueue);
-        Vk.GetDeviceQueue(Device, TransferFamilyIndex, 0, out TransferQueue);
+        Vk.GetDeviceQueue(Device, GraphicsFamilyIndex, graphicsQueueIndex, out GraphicsQueue);
+        Vk.GetDeviceQueue(Device, PresentFamilyIndex, presentQueueIndex, out PresentQueue);
+        Vk.GetDeviceQueue(Device, TransferFamilyIndex, transferQueueIndex, out TransferQueue);
+        Vk.GetDeviceQueue(Device, ComputeFamilyIndex, computeQueueIndex, out ComputeQueue);
 
-        if (TransferQueue.Handle == GraphicsQueue.Handle)
-            TransferQueueLock = QueueLock;
+        TransferQueueLock = (TransferQueue.Handle == GraphicsQueue.Handle) ? QueueLock : new Lock();
+        ComputeQueueLock = (ComputeQueue.Handle == GraphicsQueue.Handle) ? QueueLock :
+                           (ComputeQueue.Handle == TransferQueue.Handle) ? TransferQueueLock : new Lock();
 
         CommandPoolCreateInfo poolInfo = new()
         {
@@ -472,6 +530,7 @@ public unsafe class VulkanDevice : IDisposable
 
     public void Dispose()
     {
+        ExtOpacityMicromap?.Dispose();
         KhrDeferredHostOperations?.Dispose();
         KhrRayTracingPipeline?.Dispose();
         KhrAccelerationStructure?.Dispose();

@@ -1,6 +1,8 @@
-﻿using Microsoft.Extensions.Logging;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
-using MinecraftPT.Engine.Abstractions;
+using Microsoft.Extensions.Logging;
+
 using MinecraftPT.Engine.Abstractions.Graphics;
 using MinecraftPT.Engine.Core;
 using MinecraftPT.Game.Entities;
@@ -10,10 +12,7 @@ using MinecraftPT.Game.World.Environment;
 using MinecraftPT.Game.World.Meshing;
 using MinecraftPT.Graphics.Vulkan;
 using MinecraftPT.Platform.Glfw;
-
-using System.IO;
-using System.Runtime.CompilerServices;
-using System.Diagnostics;
+using MinecraftPT.Streamline;
 
 try
 {
@@ -33,7 +32,7 @@ catch (IOException)
     Console.SetError(TextWriter.Null);
 }
 
-Streamline.StreamlineAPI.EarlyInitStreamline();
+StreamlineAPI.EarlyInitStreamline();
 AppLauncher.Launch();
 
 public static class AppLauncher
@@ -55,20 +54,20 @@ public static class AppLauncher
 
         var window = new GlfwWindow("MinecraftPT Engine", 1280, 720);
         var inputManager = new GlfwInputManager(window);
-        
+
         var pipelineLogger = loggerFactory.CreateLogger<VulkanRenderPipeline>();
-        var renderPipeline = Streamline.StreamlineAPI.RunSilenced(() => new VulkanRenderPipeline(window, pipelineLogger));
-        
+        var renderPipeline = StreamlineAPI.RunSilenced(() => new VulkanRenderPipeline(window, pipelineLogger));
+
         var blockService = new BlockService();
         var resourceService = new ResourceService(blockService);
         var worldStorage = new WorldStorage("World1");
         var worldGenerator = new TerrainWorldGenerator();
         var world = new World(worldStorage, worldGenerator);
 
-        var playerInputSystem = new PlayerInputSystem(inputManager);
+        var playerInputSystem = new PlayerInputSystem(inputManager, renderPipeline);
         var physicsSystem = new PhysicsSystem(world);
         var playerInteractionSystem = new PlayerInteractionSystem(inputManager, world);
-        
+
         var engineLogger = loggerFactory.CreateLogger<EngineApp>();
         var engineApp = new EngineApp(window, inputManager, renderPipeline, engineLogger);
 

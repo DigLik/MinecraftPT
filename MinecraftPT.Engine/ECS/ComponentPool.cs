@@ -1,4 +1,6 @@
-﻿using MinecraftPT.Utils.Collections;
+using System.Runtime.CompilerServices;
+
+using MinecraftPT.Utils.Collections;
 
 namespace MinecraftPT.Engine.ECS;
 
@@ -11,6 +13,8 @@ public class ComponentPool<T> : IPool where T : unmanaged
 
     public void Add(int entityId, in T component) => _sparseSet.Add(entityId, in component);
     public ref T Get(int entityId) => ref _sparseSet.Get(entityId);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref T GetUnsafe(int entityId) => ref _sparseSet.GetUnsafe(entityId);
     public void Remove(int entityId) => _sparseSet.Remove(entityId);
     public bool Has(int entityId) => _sparseSet.Contains(entityId);
 }

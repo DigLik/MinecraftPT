@@ -1,4 +1,4 @@
-﻿using Silk.NET.Vulkan;
+using Silk.NET.Vulkan;
 
 namespace MinecraftPT.Graphics.Vulkan.Core;
 
@@ -18,8 +18,8 @@ public unsafe class VulkanBuffer : IDisposable
         _device = device;
         Size = size;
 
-        uint[] queueFamilies = [_device.GraphicsFamilyIndex, _device.TransferFamilyIndex];
-        bool useConcurrent = isShared && _device.GraphicsFamilyIndex != _device.TransferFamilyIndex;
+        uint[] queueFamilies = new[] { _device.GraphicsFamilyIndex, _device.TransferFamilyIndex, _device.ComputeFamilyIndex }.Distinct().ToArray();
+        bool useConcurrent = isShared && queueFamilies.Length > 1;
 
         BufferCreateInfo bufferInfo = new()
         {
@@ -27,7 +27,7 @@ public unsafe class VulkanBuffer : IDisposable
             Size = size,
             Usage = usage,
             SharingMode = useConcurrent ? SharingMode.Concurrent : SharingMode.Exclusive,
-            QueueFamilyIndexCount = useConcurrent ? 2u : 0u,
+            QueueFamilyIndexCount = useConcurrent ? (uint)queueFamilies.Length : 0u,
             PQueueFamilyIndices = useConcurrent ? (uint*)System.Runtime.CompilerServices.Unsafe.AsPointer(ref queueFamilies[0]) : null
         };
 
@@ -96,9 +96,21 @@ public unsafe class VulkanBuffer : IDisposable
     public void Dispose()
     {
         if (MappedMemory != null)
+        {
             _device.Vk.UnmapMemory(_device.Device, Memory);
+            MappedMemory = null;
+        }
 
-        _device.Vk.DestroyBuffer(_device.Device, Buffer, null);
-        _device.Vk.FreeMemory(_device.Device, Memory, null);
+        if (Buffer.Handle != 0)
+        {
+            _device.Vk.DestroyBuffer(_device.Device, Buffer, null);
+            Buffer = default;
+        }
+
+        if (Memory.Handle != 0)
+        {
+            _device.Vk.FreeMemory(_device.Device, Memory, null);
+            Memory = default;
+        }
     }
 }

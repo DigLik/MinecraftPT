@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 namespace MinecraftPT.Game.World.Meshing;
@@ -9,7 +8,11 @@ public record struct ChunkVertex(
     uint PackedData
 );
 
-public record struct ChunkMesh(List<ChunkVertex>? Vertices = default, List<ushort>? Indices = default, uint OpaqueIndexCount = 0)
+public record struct ChunkMesh(
+    List<ChunkVertex>? Vertices = default,
+    List<ushort>? Indices = default,
+    uint OpaqueIndexCount = 0,
+    List<ushort>? OmmIndices = default)
 {
     public readonly bool IsEmpty => Vertices == null || Indices == null || Vertices.Count == 0 || Indices.Count == 0;
 }

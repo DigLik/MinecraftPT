@@ -1,11 +1,11 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace MinecraftPT.Utils.Math;
 
-public struct BoundingBox(Vector3 min, Vector3 max)
+public readonly struct BoundingBox(Vector3 min, Vector3 max)
 {
-    public Vector3 Min = min, Max = max;
+    public readonly Vector3 Min = min, Max = max;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Intersects(in BoundingBox other)

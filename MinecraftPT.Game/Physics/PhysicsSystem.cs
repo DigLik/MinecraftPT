@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 
 using MinecraftPT.Engine.Core;
 using MinecraftPT.Engine.ECS;
@@ -102,20 +102,10 @@ public class PhysicsSystem(GameWorld world) : ISystem
         int cy = (int)MathF.Floor(transform.LocalPosition.Y / ChunkSize);
         int cz = (int)MathF.Floor(transform.LocalPosition.Z / ChunkSize);
 
-        if (cx != 0)
+        if (cx != 0 || cy != 0 || cz != 0)
         {
-            transform.ChunkPosition.X += cx;
-            transform.LocalPosition.X -= cx * ChunkSize;
-        }
-        if (cy != 0)
-        {
-            transform.ChunkPosition.Y += cy;
-            transform.LocalPosition.Y -= cy * ChunkSize;
-        }
-        if (cz != 0)
-        {
-            transform.ChunkPosition.Z += cz;
-            transform.LocalPosition.Z -= cz * ChunkSize;
+            transform.ChunkPosition += new Vector3Int(cx, cy, cz);
+            transform.LocalPosition -= new Vector3(cx * ChunkSize, cy * ChunkSize, cz * ChunkSize);
         }
     }
 

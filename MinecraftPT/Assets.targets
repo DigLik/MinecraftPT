@@ -3,6 +3,7 @@
   <ItemGroup>
     <!-- Assets handling: Shader & Texture raw sources -->
     <VulkanShader Include="Assets\Shaders\*.hlsl" />
+    <VulkanShaderHeader Include="Assets\Shaders\*.hlsli" />
     <RawTexture Include="Assets\Textures\**\*.png" />
 
     <!-- Verbatim copy ALL assets by default -->
@@ -10,16 +11,17 @@
 
     <!-- OVERRIDE raw sources: Keep them visible in VS but do NOT copy verbatim to Output -->
     <None Update="Assets\Shaders\*.hlsl" CopyToOutputDirectory="Never" />
+    <None Update="Assets\Shaders\*.hlsli" CopyToOutputDirectory="Never" />
     <None Update="Assets\Textures\**\*.png" CopyToOutputDirectory="Never" />
     
     <Folder Include="Assets\" />
   </ItemGroup>
 
   <!-- Auto-compile MSBuild steps -->
-  <Target Name="CompileVulkanShaders" BeforeTargets="AssignTargetPaths" Inputs="@(VulkanShader)" Outputs="@(VulkanShader->'$(IntermediateOutputPath)Assets\%(Filename).spv')">
+  <Target Name="CompileVulkanShaders" BeforeTargets="AssignTargetPaths" Inputs="@(VulkanShader);@(VulkanShaderHeader)" Outputs="@(VulkanShader->'$(IntermediateOutputPath)Assets\%(Filename).spv')">
     <Message Text="[Vulkan] Компиляция шейдера: %(VulkanShader.Filename)%(VulkanShader.Extension)" Importance="high" />
     <MakeDir Directories="$(IntermediateOutputPath)Assets" />
-    <Exec Command="dotnet run --project ../MinecraftPT.ShaderCompiler/MinecraftPT.ShaderCompiler.csproj -- &quot;%(VulkanShader.FullPath)&quot; &quot;$(MSBuildProjectDirectory)\$(IntermediateOutputPath)Assets\%(VulkanShader.Filename).spv&quot;" />
+    <Exec Command="dotnet run --project ../MinecraftPT.ShaderCompiler/MinecraftPT.ShaderCompiler.csproj -- &quot;%(VulkanShader.FullPath)&quot; &quot;$(MSBuildProjectDirectory)\$(IntermediateOutputPath)Assets\%(VulkanShader.Filename).spv&quot; -I &quot;%(VulkanShader.RootDir)%(VulkanShader.Directory).&quot;" />
     <ItemGroup>
       <EmbeddedResource Include="$(IntermediateOutputPath)Assets\%(VulkanShader.Filename).spv">
         <Link>Assets\Shaders\%(VulkanShader.Filename).spv</Link>
